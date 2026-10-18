@@ -9,6 +9,34 @@
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0c0d10">
 <meta name="description" content="Crop, resize, rotate, adjust, filter, scan, frame and watermark images — entirely in your browser. Nothing is ever uploaded.">
+<script>
+/* Decide the layout from the DEVICE, not just the viewport width.
+   Chrome's "Request desktop site" spoofs a wide viewport (~980px), which used to
+   force the desktop UI onto phones — including inside the installed app.
+   A touch device with a small screen stays "compact" no matter what the
+   browser claims its viewport is. Runs before the stylesheet, so no flash. */
+(function () {
+  var root = document.documentElement;
+  function pick() {
+    var w = window.innerWidth || 9999;
+    var sw = (window.screen && window.screen.width) || 9999;
+    var eff = Math.min(w, sw);
+    var touch = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
+    var coarse = false;
+    try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch (e) {}
+    // narrow viewport on ANY device, or a touch device whose viewport is phone/
+    // tablet sized (this is what catches "Request desktop site" at ~980px).
+    // screen width is only trusted when it is unmistakably a phone, so a
+    // touchscreen laptop can never be mistaken for one.
+    var compact = (w <= 820) || (touch && coarse && (w <= 1024 || sw <= 500));
+    root.setAttribute('data-ui', compact ? 'compact' : 'full');
+    root.setAttribute('data-size', eff <= 380 ? 'xs' : 'sm');
+  }
+  pick();
+  window.addEventListener('resize', pick);
+  window.addEventListener('orientationchange', function () { setTimeout(pick, 200); });
+})();
+</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
@@ -436,6 +464,55 @@ input[type=range]::-moz-range-thumb{
 
 .hidden{display:none !important}
 
+
+  /* Phone layout: image stays fully visible — the tools dock below it in normal
+     flow (a bottom sheet) instead of floating over the canvas. */
+  html[data-ui="compact"] .topbar{height:50px;padding:0 10px;gap:8px}
+  html[data-ui="compact"] .body{flex-direction:column}
+  html[data-ui="compact"] .stage{order:1;overscroll-behavior:contain}
+  html[data-ui="compact"] .panel{
+    order:2;width:auto;max-height:42vh;border-left:none;
+    border-top:1px solid var(--border);display:none;
+    box-shadow:0 -14px 40px rgba(0,0,0,.5);
+  }
+  html[data-ui="compact"] .panel.open{display:flex;animation:sheetUp .2s ease}
+  html[data-ui="compact"] .panel-resizer{display:none}
+  html[data-ui="compact"] .sheet-grip{display:flex}
+  html[data-ui="compact"] .panel-body{padding:12px 14px 14px}
+  html[data-ui="compact"] .panel-head{padding:12px 14px 10px}
+  html[data-ui="compact"] .rail{
+    order:3;width:100%;height:66px;flex-direction:row;align-items:center;gap:4px;
+    border-right:none;border-top:1px solid var(--border);
+    overflow-x:auto;overflow-y:hidden;padding:6px 8px;scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+  html[data-ui="compact"] .rail::-webkit-scrollbar{display:none}
+  html[data-ui="compact"] .rail-btn{flex:0 0 auto;margin:0;min-width:58px;padding:7px 4px;font-size:9.5px}
+  html[data-ui="compact"] .rail-btn.on::before{display:none}
+  html[data-ui="compact"] .doc-name{display:none}
+  html[data-ui="compact"] .brand .name{display:none}
+  html[data-ui="compact"] .brand{padding-right:8px}
+  html[data-ui="compact"] .tbtn .lbl{display:none}
+  html[data-ui="compact"] .tbtn.primary .lbl{display:inline}
+  html[data-ui="compact"] .panel-close{display:grid}
+  html[data-ui="compact"] .filmstrip{height:60px;padding:0 10px;gap:8px}
+  html[data-ui="compact"] .thumb,html[data-ui="compact"] .fs-add{height:44px;width:44px}
+  html[data-ui="compact"] .empty .drop{padding:26px 22px}
+  html[data-ui="compact"] .zoombar{bottom:10px;padding:3px}
+  html[data-ui="compact"] .zoombar button{height:26px;min-width:26px;font-size:11px}
+  /* toasts drop in from under the top bar so they never sit on the tool sheet */
+  html[data-ui="compact"] #toast{top:60px;bottom:auto;transform:translate(-50%,-14px)}
+  html[data-ui="compact"] #toast.show{transform:translate(-50%,0)}
+  html[data-ui="compact"] .hnd{width:20px;height:20px;border-radius:5px}
+  html[data-ui="compact"] .hnd[data-h="nw"]{left:-10px;top:-10px}
+  html[data-ui="compact"] .hnd[data-h="ne"]{right:-10px;top:-10px}
+  html[data-ui="compact"] .hnd[data-h="sw"]{left:-10px;bottom:-10px}
+  html[data-ui="compact"] .hnd[data-h="se"]{right:-10px;bottom:-10px}
+  html[data-ui="compact"] .hnd[data-h="n"]{left:50%;top:-10px;transform:translateX(-50%)}
+  html[data-ui="compact"] .hnd[data-h="s"]{left:50%;bottom:-10px;transform:translateX(-50%)}
+  html[data-ui="compact"] .hnd[data-h="w"]{left:-10px;top:50%;transform:translateY(-50%)}
+  html[data-ui="compact"] .hnd[data-h="e"]{right:-10px;top:50%;transform:translateY(-50%)}
+
 @media (max-width:820px){
   /* Phone layout: image stays fully visible — the tools dock below it in normal
      flow (a bottom sheet) instead of floating over the canvas. */
@@ -486,6 +563,10 @@ input[type=range]::-moz-range-thumb{
   .hnd[data-h="e"]{right:-10px;top:50%;transform:translateY(-50%)}
 }
 @keyframes sheetUp{from{transform:translateY(16px);opacity:.5}to{transform:none;opacity:1}}
+
+  html[data-size="xs"] .rail-btn{min-width:52px;font-size:9px}
+  html[data-size="xs"] .panel{max-height:50vh}
+
 @media (max-width:380px){
   .rail-btn{min-width:52px;font-size:9px}
   .panel{max-height:50vh}
@@ -837,7 +918,7 @@ const S = {
   tool: 'crop',
   zoom: 1,
   compare: false,
-  crop: { x: .06, y: .06, w: .88, h: .88 },
+  crop: { x: 0, y: 0, w: 1, h: 1 },
   ratio: null,
   lastFit: 1,
   exportFormat: 'image/png',
@@ -950,7 +1031,7 @@ function render() {
   if (!a) return;
   const stage = $('#stage');
   // tighter padding on phones so the photo gets as much of the screen as possible
-  const pad = window.innerWidth <= 820 ? 24 : 90;
+  const pad = isMobile() ? 24 : 90;
   const availW = Math.max(80, stage.clientWidth - pad);
   const availH = Math.max(80, stage.clientHeight - pad);
   const fit = Math.min(availW / a.source.width, availH / a.source.height, 1);
@@ -1011,7 +1092,8 @@ function updateCropInfo() {
 }
 function resetCrop() {
   S.ratio = null;
-  S.crop = { x: .06, y: .06, w: .88, h: .88 };
+  // start covering the WHOLE image — the user picks an aspect ratio from there
+  S.crop = { x: 0, y: 0, w: 1, h: 1 };
   positionCrop();
   buildPanel();
 }
@@ -1074,6 +1156,10 @@ function applyCrop() {
   const w = Math.round(S.crop.w * a.source.width);
   const h = Math.round(S.crop.h * a.source.height);
   if (w < 4 || h < 4) { toast('Crop area too small'); return; }
+  if (S.crop.x < 0.002 && S.crop.y < 0.002 && S.crop.w > 0.996 && S.crop.h > 0.996) {
+    toast('The selection already covers the whole image');
+    return;
+  }
   pushOp({ type:'crop', x, y, w, h });
   resetCrop();
   toast('Cropped to ' + w + '×' + h);
@@ -1135,7 +1221,7 @@ function setActive(i) {
   updateHistoryUI();
   if (a) $('#docName').textContent = a.name;
 }
-function resetCropSilent() { S.ratio = null; S.crop = { x:.06, y:.06, w:.88, h:.88 }; }
+function resetCropSilent() { S.ratio = null; S.crop = { x:0, y:0, w:1, h:1 }; }
 
 /* ---------- filmstrip ---------- */
 function refreshFilmstrip() {
@@ -1721,7 +1807,9 @@ $('#zVal').addEventListener('click', () => setZoom(1));
 
 /* ---------- top bar actions ---------- */
 /* ---------- layout: panel show / hide / resize / mobile sheet ---------- */
-const isMobile = () => window.matchMedia('(max-width: 820px)').matches;
+// layout mode is decided in <head> from device signals (see the detection
+// script) so JS and CSS always agree, even under a spoofed desktop viewport
+const isMobile = () => document.documentElement.getAttribute('data-ui') === 'compact';
 const store = {
   get(k, d) { try { const v = localStorage.getItem('lumen.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('lumen.' + k, JSON.stringify(v)); } catch (e) {} }
