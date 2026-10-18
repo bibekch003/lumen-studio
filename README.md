@@ -14,6 +14,8 @@ It is also an installable **Progressive Web App**: open the site, tap **Install*
 | **Resize** | Width / height with aspect lock, plus quick 25–400% presets |
 | **Transform** | Rotate 90 deg left/right, flip horizontal/vertical, straighten slider (-45 to +45 deg) that auto-expands the canvas |
 | **Adjust** | Brightness, contrast, exposure, saturation, temperature, tint, hue, fade, sharpen, blur, vignette, grayscale, sepia, invert + one-click Auto enhance |
+| **Curves** | Interactive tone-curve editor — RGB composite plus separate R, G and B channels. Click to add a point, drag to shape it, double-click to remove. Monotone cubic interpolation, so the curve never overshoots |
+| **HSL** | Per-colour-range grading across 8 bands (reds, oranges, yellows, greens, aquas, blues, purples, magentas), each with hue, saturation and luminance |
 | **Filters** | 14 live-thumbnail presets (Vivid, Warm, Cool, Fade, Noir, Vintage, Cinematic, Punch, Matte, Film and more) |
 | **Scan** | Document, B&W Text, Grayscale, Whiteboard, Color Scan and Receipt modes with a threshold slider for crisp text |
 | **Frame** | Solid border with thickness control and a colour picker |
@@ -21,20 +23,35 @@ It is also an installable **Progressive Web App**: open the site, tap **Install*
 
 Plus: multi-image filmstrip, full undo/redo, hold-to-Compare against the original, one-click **Revert to original**, fit / 1:1 / zoom controls, and export to **PNG, JPG, WEBP or AVIF** with quality control.
 
+## Non-destructive editing
+
+Every change is a step in a history stack, replayed from the untouched original — so undo/redo never degrades quality, and **Revert** restores the original exactly.
+
+Curves and HSL follow the same principle: they are **live** while you adjust them, so you can go back and reshape a curve at any point. Pressing **Apply** commits the current look as one history step and returns the controls to neutral, so you can keep grading on top without ever flattening the file.
+
+## Autosave and crash recovery
+
+Your session is written to the browser's IndexedDB a moment after each change — the original files, the edit history, curves and HSL settings. Close the tab, crash the browser, or lose power: reopening the app brings the work back and tells you it did. Removing all images clears the saved session.
+
 ## Install it as an app
 
-- **Android / Chrome** — tap **Install** in the top bar, or browser menu → *Install app*
-- **iPhone / iPad** — Share → *Add to Home Screen*
+- **Android / Chrome** — tap **Install** in the top bar, or browser menu -> *Install app*
+- **iPhone / iPad** — Share -> *Add to Home Screen*
 - **Desktop** — the install icon at the right end of the address bar
 
 ## Works properly on phones
 
-- The tool panel docks **below** the image as a bottom sheet, in normal document flow — so the canvas shrinks and the image re-fits rather than being covered.
-- All eight tools sit in a **horizontally scrollable bar** at the bottom, always within thumb reach.
-- Tapping the active tool again (or the grip, or the X) collapses the sheet for a full-screen view.
-- Crop handles grow to 20 px for reliable touch dragging.
+The layout is decided from **device signals** (touch capability and pointer type), not just viewport width. That matters because Chrome's *Request desktop site* mode spoofs a ~980px viewport, which would otherwise force the desktop UI onto a phone — including inside the installed app. A touch device with a phone-sized screen always gets the compact layout.
+
+- The tool panel docks **below** the image as a bottom sheet, in normal document flow, so the canvas shrinks and the image re-fits rather than being covered.
+- All eight tools sit in a **horizontally scrollable bar** at the bottom, within thumb reach.
+- Tapping the active tool again (or the grip, or the X) collapses the sheet.
 
 On desktop the tools panel is **resizable** (drag its left edge) and can be **collapsed** entirely.
+
+## Performance
+
+Heavy pixel work (HSL, curves, sharpen) is done in a single tight loop over the image data. While you drag a slider the app renders a **smaller preview** and switches back to full resolution the moment you let go, so grading stays responsive on large images. Measured at 1.6 megapixels, the full curve + HSL pass takes roughly 140 ms.
 
 ## How updates work
 
@@ -50,7 +67,7 @@ If you edit the precache list in `sw.js`, bump the `VERSION` constant.
 - File names are sanitised before use, thumbnails are built with the DOM API rather than `innerHTML`, and oversized uploads are rejected.
 - `Referrer-Policy: no-referrer`.
 
-*Note:* the inline script is allowed via `'unsafe-inline'` in `script-src`, which keeps the single file easy to edit by hand. If you want a hash-pinned policy instead, replace it with `script-src 'sha256-…'` — but you will then need to update the hash whenever the script changes.
+*Note:* the inline script is allowed via `'unsafe-inline'` in `script-src`, which keeps the single file easy to edit by hand. If you want a hash-pinned policy instead, replace it with `script-src 'sha256-...'` — but you will then need to update the hash whenever the script changes.
 
 ## Files
 
@@ -71,6 +88,12 @@ icons/                  icon set (192, 512, maskable, apple-touch)
 - `Enter` / `Esc` — apply / reset crop
 
 The **?** button in the top bar lists every shortcut in-app.
+
+## Roadmap
+
+Done: crop, resize, transform, adjustments, curves, HSL, filters, scan, frame, watermark, non-destructive history, autosave/crash recovery, PWA with offline support.
+
+Next: a full layer stack with masks, a WebGL render pipeline, TIFF/PSD/PDF support, then optionally background removal and cloud features.
 
 ## Tech
 

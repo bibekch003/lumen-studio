@@ -462,6 +462,34 @@ input[type=range]::-moz-range-thumb{
 #toast.show{opacity:1;transform:translate(-50%,0)}
 #toast .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
 
+/* ---------- curves + HSL ---------- */
+.curve-wrap{display:flex;flex-direction:column;gap:10px}
+.curve-tabs{display:flex;gap:6px}
+.curve-tab{
+  flex:1;height:28px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);
+  color:var(--dim);font-family:var(--mono);font-size:10.5px;cursor:pointer;transition:.13s;
+}
+.curve-tab:hover{background:var(--surface3);color:var(--text)}
+.curve-tab.on{color:var(--c,#fff);border-color:var(--c,#fff);background:var(--surface3)}
+.curve-canvas{
+  display:block;width:100%;max-width:220px;aspect-ratio:1;margin:0 auto;
+  border-radius:8px;border:1px solid var(--border2);cursor:crosshair;touch-action:none;
+}
+.curve-hint{font-size:10.5px;color:var(--dim2);line-height:1.5;text-align:center}
+.curve-reset{
+  height:30px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border);
+  color:var(--dim);font-size:12px;cursor:pointer;transition:.13s;
+}
+.curve-reset:hover{background:var(--surface3);color:var(--text)}
+.hsl-bands{display:flex;gap:4px;margin-bottom:12px}
+.hsl-band{
+  flex:1;height:26px;padding:0;border-radius:6px;background:var(--surface2);
+  border:1px solid var(--border);color:var(--dim);font-family:var(--mono);font-size:9px;
+  cursor:pointer;transition:.13s;
+}
+.hsl-band:hover{background:var(--surface3);color:var(--text)}
+.hsl-band.on{background:var(--surface3);border-color:var(--c,#fff);color:var(--c,#fff)}
+
 .hidden{display:none !important}
 
 
@@ -814,9 +842,173 @@ function filterString(a) {
   if (a.blur) p.push('blur(' + a.blur + 'px)');
   return p.length ? p.join(' ') : 'none';
 }
-const needsPixel = a => !!(a.exposure || a.temperature || a.tint || a.fade || a.vignette || a.threshold || a.sharpen);
+/* ============ non-destructive colour: curves + HSL ============ */
 
-function pixelOps(ctx, w, h, a) {
+/* ---------- curves: monotone cubic (smooth, never overshoots) ---------- */
+const CURVE_CH = ['rgb', 'r', 'g', 'b'];
+function defaultCurve() {
+  const id = () => [{ x: 0, y: 0 }, { x: 1, y: 1 }];
+  return { rgb: id(), r: id(), g: id(), b: id() };
+}
+const curveIsIdentity = pts =>
+  pts.length === 2 && pts[0].x === 0 && pts[0].y === 0 && pts[1].x === 1 && pts[1].y === 1;
+const curveActive = c => !!c && CURVE_CH.some(ch => c[ch] && !curveIsIdentity(c[ch]));
+
+function curveLUT(points) {
+  const pts = points.slice().sort((p, q) => p.x - q.x);
+  const n = pts.length;
+  const lut = new Uint8Array(256);
+  if (n < 2) { for (let i = 0; i < 256; i++) lut[i] = i; return lut; }
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const d = new Array(n - 1);
+  for (let i = 0; i < n - 1; i++) {
+    const h = xs[i + 1] - xs[i];
+    d[i] = h > 1e-9 ? (ys[i + 1] - ys[i]) / h : 0;
+  }
+  const m = new Array(n);
+  m[0] = d[0]; m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i++) m[i] = (d[i - 1] * d[i] <= 0) ? 0 : (d[i - 1] + d[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+    const a1 = m[i] / d[i], b1 = m[i + 1] / d[i], s = a1 * a1 + b1 * b1;
+    if (s > 9) { const t = 3 / Math.sqrt(s); m[i] = t * a1 * d[i]; m[i + 1] = t * b1 * d[i]; }
+  }
+  for (let k = 0; k < 256; k++) {
+    const x = k / 255;
+    let y;
+    if (x <= xs[0]) y = ys[0];
+    else if (x >= xs[n - 1]) y = ys[n - 1];
+    else {
+      let i = 0; while (i < n - 2 && x > xs[i + 1]) i++;
+      const h = xs[i + 1] - xs[i], t = h > 1e-9 ? (x - xs[i]) / h : 0;
+      const t2 = t * t, t3 = t2 * t;
+      y = (2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * h * m[i] +
+          (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * h * m[i + 1];
+    }
+    lut[k] = Math.max(0, Math.min(255, Math.round(y * 255)));
+  }
+  return lut;
+}
+
+/* ---------- HSL over 8 colour ranges ---------- */
+const HSL_BANDS = [
+  { key: 'red',     center: 0,   label: 'Reds' },
+  { key: 'orange',  center: 30,  label: 'Oranges' },
+  { key: 'yellow',  center: 60,  label: 'Yellows' },
+  { key: 'green',   center: 120, label: 'Greens' },
+  { key: 'aqua',    center: 180, label: 'Aquas' },
+  { key: 'blue',    center: 240, label: 'Blues' },
+  { key: 'purple',  center: 285, label: 'Purples' },
+  { key: 'magenta', center: 330, label: 'Magentas' }
+];
+function defaultHsl() { const o = {}; HSL_BANDS.forEach(b => o[b.key] = [0, 0, 0]); return o; }
+const hslActive = h => !!h && HSL_BANDS.some(b => { const v = h[b.key]; return v && (v[0] || v[1] || v[2]); });
+
+/* hue -> weighted (hue shift, saturation, luminance), built once per render */
+function buildHueTable(hsl) {
+  const tab = new Float32Array(360 * 3);
+  for (let h = 0; h < 360; h++) {
+    let dh = 0, ds = 0, dl = 0;
+    for (let i = 0; i < HSL_BANDS.length; i++) {
+      const b = HSL_BANDS[i], v = hsl[b.key];
+      if (!v || (!v[0] && !v[1] && !v[2])) continue;
+      let dist = Math.abs(h - b.center) % 360;
+      if (dist > 180) dist = 360 - dist;
+      const w = 1 - dist / 46;
+      if (w <= 0) continue;
+      dh += v[0] * w; ds += v[1] * w; dl += v[2] * w;
+    }
+    tab[h * 3] = dh; tab[h * 3 + 1] = ds; tab[h * 3 + 2] = dl;
+  }
+  return tab;
+}
+
+/* ============ autosave / crash recovery (IndexedDB) ============ */
+const IDB_NAME = 'lumen-studio', IDB_STORE = 'session';
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(IDB_NAME, 1);
+    r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE); };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbPut(key, val) {
+  try {
+    const db = await idbOpen();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(val, key);
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
+    });
+  } catch (e) {}
+}
+async function idbGet(key) {
+  try {
+    const db = await idbOpen();
+    return await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const rq = tx.objectStore(IDB_STORE).get(key);
+      rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+    });
+  } catch (e) { return null; }
+}
+async function idbDel(key) {
+  try {
+    const db = await idbOpen();
+    await new Promise(res => { const tx = db.transaction(IDB_STORE, 'readwrite'); tx.objectStore(IDB_STORE).delete(key); tx.oncomplete = res; tx.onerror = res; tx.onabort = res; });
+  } catch (e) {}
+}
+
+let saveTimer = null, restoring = false;
+function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveSession, 1200); }
+
+async function saveSession() {
+  try {
+    const recs = [];
+    for (const im of S.images) {
+      if (!im.blob) continue;
+      recs.push({ name: im.name, blob: im.blob, ops: im.ops, index: im.index,
+                  adj: im.adj, curve: im.curve, hsl: im.hsl });
+    }
+    if (!recs.length) { await idbDel('current'); return; }
+    await idbPut('current', { v: 1, at: Date.now(), activeIdx: S.activeIdx, images: recs });
+  } catch (e) {}
+}
+
+async function restoreSession() {
+  const data = await idbGet('current');
+  if (!data || !data.images || !data.images.length) return false;
+  restoring = true;
+  for (const rec of data.images) {
+    if (!rec.blob) continue;
+    await new Promise(res => {
+      let f = rec.blob;
+      try { f = new File([rec.blob], rec.name || 'image', { type: rec.blob.type || 'image/png' }); } catch (e) {}
+      addImageFromFile(f, obj => {
+        if (obj) {
+          obj.ops = rec.ops || [];
+          obj.index = typeof rec.index === 'number' ? rec.index : (obj.ops.length - 1);
+          obj.adj = Object.assign(defaultAdj(), rec.adj || {});
+          obj.curve = rec.curve || defaultCurve();
+          obj.hsl = rec.hsl || defaultHsl();
+        }
+        res();
+      });
+    });
+  }
+  restoring = false;
+  if (!S.images.length) return false;
+  setActive(Math.min(data.activeIdx || 0, S.images.length - 1));
+  toast('Restored your last session');
+  return true;
+}
+
+/* ---------- pixel passes ---------- */
+const needsPixel = (a, curve, hsl) => !!(a.exposure || a.temperature || a.tint || a.fade ||
+  a.vignette || a.threshold || a.sharpen) || curveActive(curve) || hslActive(hsl);
+
+function pixelOps(ctx, w, h, a, curve, hsl) {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
   const ex = Math.pow(2, a.exposure / 100);
@@ -825,12 +1017,60 @@ function pixelOps(ctx, w, h, a) {
   const th = a.threshold;
   const vig = a.vignette / 100;
   const cx = w / 2, cy = h / 2, maxd = Math.hypot(cx, cy) || 1;
+
+  const useC = curveActive(curve);
+  let Lrgb, Lr, Lg, Lb;
+  if (useC) { Lrgb = curveLUT(curve.rgb); Lr = curveLUT(curve.r); Lg = curveLUT(curve.g); Lb = curveLUT(curve.b); }
+  const useH = hslActive(hsl);
+  const hueTab = useH ? buildHueTable(hsl) : null;
+
   for (let i = 0; i < d.length; i += 4) {
     let r = d[i], g = d[i+1], b = d[i+2];
     if (ex !== 1) { r *= ex; g *= ex; b *= ex; }
     if (tp) { r += tp * 46; b -= tp * 46; }
     if (tn) { g += tn * 40; r -= tn * 18; b -= tn * 18; }
     if (fd) { const lift = fd * 34; r += lift; g += lift; b += lift; }
+
+    if (useC) {
+      r = Lr[r < 0 ? 0 : r > 255 ? 255 : r | 0];
+      g = Lg[g < 0 ? 0 : g > 255 ? 255 : g | 0];
+      b = Lb[b < 0 ? 0 : b > 255 ? 255 : b | 0];
+      r = Lrgb[r]; g = Lrgb[g]; b = Lrgb[b];
+    }
+
+    if (useH) {
+      const rn = r / 255, gn = g / 255, bn = b / 255;
+      const mx = rn > gn ? (rn > bn ? rn : bn) : (gn > bn ? gn : bn);
+      const mn = rn < gn ? (rn < bn ? rn : bn) : (gn < bn ? gn : bn);
+      let H = 0, S = 0, L = (mx + mn) / 2;
+      const dd = mx - mn;
+      if (dd > 1e-6) {
+        S = L > 0.5 ? dd / (2 - mx - mn) : dd / (mx + mn);
+        if (mx === rn) H = ((gn - bn) / dd) % 6;
+        else if (mx === gn) H = (bn - rn) / dd + 2;
+        else H = (rn - gn) / dd + 4;
+        H *= 60; if (H < 0) H += 360;
+      }
+      if (S > 1e-6) {
+        const hi = H | 0;
+        const dh = hueTab[hi * 3], ds = hueTab[hi * 3 + 1], dl = hueTab[hi * 3 + 2];
+        if (dh || ds || dl) {
+          H += dh * 0.5; H = ((H % 360) + 360) % 360;
+          S = S * (1 + ds / 100); S = S < 0 ? 0 : S > 1 ? 1 : S;
+          L = L + dl / 200; L = L < 0 ? 0 : L > 1 ? 1 : L;
+          const q = L < 0.5 ? L * (1 + S) : L + S - L * S;
+          const p = 2 * L - q;
+          let tr = H / 360 + 1 / 3, tg = H / 360, tb = H / 360 - 1 / 3;
+          if (tr < 0) tr += 1; if (tr > 1) tr -= 1;
+          if (tg < 0) tg += 1; if (tg > 1) tg -= 1;
+          if (tb < 0) tb += 1; if (tb > 1) tb -= 1;
+          r = 255 * (tr < 1/6 ? p + (q - p) * 6 * tr : tr < 1/2 ? q : tr < 2/3 ? p + (q - p) * (2/3 - tr) * 6 : p);
+          g = 255 * (tg < 1/6 ? p + (q - p) * 6 * tg : tg < 1/2 ? q : tg < 2/3 ? p + (q - p) * (2/3 - tg) * 6 : p);
+          b = 255 * (tb < 1/6 ? p + (q - p) * 6 * tb : tb < 1/2 ? q : tb < 2/3 ? p + (q - p) * (2/3 - tb) * 6 : p);
+        }
+      }
+    }
+
     if (vig) {
       const px = (i / 4) % w, py = Math.floor((i / 4) / w);
       const dist = Math.hypot(px - cx, py - cy) / maxd;
@@ -878,11 +1118,11 @@ function sharpen(ctx, w, h, amount) {
 }
 
 /* paint a source canvas into ctx at w×h with the adjustment set applied */
-function paint(ctx, src, w, h, a) {
+function paint(ctx, src, w, h, a, curve, hsl) {
   ctx.filter = filterString(a);
   ctx.drawImage(src, 0, 0, w, h);
   ctx.filter = 'none';
-  if (needsPixel(a)) pixelOps(ctx, w, h, a);
+  if (needsPixel(a, curve, hsl)) pixelOps(ctx, w, h, a, curve, hsl);
 }
 
 /* ---------- watermark ---------- */
@@ -918,6 +1158,7 @@ const S = {
   tool: 'crop',
   zoom: 1,
   compare: false,
+  fastPreview: false,
   crop: { x: 0, y: 0, w: 1, h: 1 },
   ratio: null,
   lastFit: 1,
@@ -981,7 +1222,7 @@ function applyOp(cv, op) {
   if (op.type === 'adj') {
     const c = makeCanvas(cv.width, cv.height);
     const g = c.getContext('2d');
-    paint(g, cv, c.width, c.height, op.adj);
+    paint(g, cv, c.width, c.height, op.adj || defaultAdj(), op.curve || defaultCurve(), op.hsl || defaultHsl());
     return c;
   }
   if (op.type === 'watermark') {
@@ -1001,6 +1242,7 @@ function replay() {
   render();
   refreshFilmstrip();
   updateHistoryUI();
+  scheduleSave();
 }
 
 function pushOp(op) {
@@ -1046,7 +1288,9 @@ function render() {
   const cv = $('#view');
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   let iw = Math.round(dispW * dpr), ih = Math.round(dispH * dpr);
-  const cap = 2400;
+  // while a slider is being dragged we render a smaller preview so the heavier
+  // passes (HSL, curves, sharpen) stay responsive
+  const cap = S.fastPreview ? 900 : 2400;
   if (iw > cap) { const s = cap / iw; iw = Math.round(iw * s); ih = Math.round(ih * s); }
   cv.width = iw; cv.height = ih;
   cv.style.width = dispW + 'px'; cv.style.height = dispH + 'px';
@@ -1055,7 +1299,9 @@ function render() {
   ctx.clearRect(0, 0, iw, ih);
   const useSrc = S.compare ? a.original : a.source;
   const useAdj = S.compare ? defaultAdj() : a.adj;
-  paint(ctx, useSrc, iw, ih, useAdj);
+  const useCurve = S.compare ? defaultCurve() : a.curve;
+  const useHsl = S.compare ? defaultHsl() : a.hsl;
+  paint(ctx, useSrc, iw, ih, useAdj, useCurve, useHsl);
 
   positionCrop();
   updateStatus();
@@ -1172,39 +1418,53 @@ function addFromCanvas(name, src, canvas) {
     original: cloneCanvas(canvas),
     source: canvas,
     ops: [], index: -1,
-    adj: defaultAdj()
+    adj: defaultAdj(),
+    curve: defaultCurve(),
+    hsl: defaultHsl(),
+    blob: null
   };
   S.images.push(obj);
   return obj;
 }
-function loadFiles(files) {
-  let pending = 0, started = false;
-  Array.from(files).forEach(f => {
-    if (!f.type || !f.type.startsWith('image/')) return;
-    if (f.size > 60 * 1024 * 1024) { toast('Skipped ' + f.name + ' — larger than 60 MB'); return; }
-    pending++; started = true;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        let w = img.naturalWidth, h = img.naturalHeight;
-        const MAX = 4096;
-        const sc = Math.min(1, MAX / Math.max(w, h));
-        w = Math.round(w * sc); h = Math.round(h * sc);
-        const c = makeCanvas(w, h);
-        c.getContext('2d').drawImage(img, 0, 0, w, h);
-        const obj = addFromCanvas(f.name, reader.result, c);
-        if (S.activeIdx < 0) setActive(S.images.length - 1);
-        else refreshFilmstrip();
-        pending--;
-        if (pending === 0) toast(S.images.length + (S.images.length === 1 ? ' image loaded' : ' images loaded'));
-      };
-      img.onerror = () => { pending--; toast('Could not read ' + f.name); };
-      img.src = reader.result;
+function addImageFromFile(f, done) {
+  if (!f || !f.type || !f.type.startsWith('image/')) { if (done) done(null); return; }
+  if (f.size > 60 * 1024 * 1024) { toast('Skipped ' + f.name + ' — larger than 60 MB'); if (done) done(null); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight;
+      const MAX = 4096;
+      const sc = Math.min(1, MAX / Math.max(w, h));
+      w = Math.round(w * sc); h = Math.round(h * sc);
+      const c = makeCanvas(w, h);
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      const obj = addFromCanvas(f.name, reader.result, c);
+      obj.blob = f;                       // keep the untouched original for autosave
+      if (S.activeIdx < 0) setActive(S.images.length - 1);
+      else refreshFilmstrip();
+      if (done) done(obj);
     };
-    reader.readAsDataURL(f);
+    img.onerror = () => { toast('Could not read ' + f.name); if (done) done(null); };
+    img.src = reader.result;
+  };
+  reader.onerror = () => { if (done) done(null); };
+  reader.readAsDataURL(f);
+}
+
+function loadFiles(files) {
+  const list = Array.from(files);
+  if (!list.length) { toast('No supported images found'); return; }
+  let pending = list.length;
+  list.forEach(f => {
+    addImageFromFile(f, () => {
+      pending--;
+      if (pending === 0 && !restoring) {
+        toast(S.images.length + (S.images.length === 1 ? ' image loaded' : ' images loaded'));
+        scheduleSave();
+      }
+    });
   });
-  if (!started) toast('No supported images found');
 }
 
 function setActive(i) {
@@ -1220,6 +1480,7 @@ function setActive(i) {
   buildPanel();
   updateHistoryUI();
   if (a) $('#docName').textContent = a.name;
+  scheduleSave();
 }
 function resetCropSilent() { S.ratio = null; S.crop = { x:0, y:0, w:1, h:1 }; }
 
@@ -1264,10 +1525,12 @@ function removeImage(i) {
     buildPanel();
     refreshFilmstrip();
     updateHistoryUI();
+    scheduleSave();
     return;
   }
   if (S.activeIdx >= S.images.length) S.activeIdx = S.images.length - 1;
   setActive(S.activeIdx);
+  scheduleSave();
 }
 
 /* =========================================================
@@ -1330,7 +1593,17 @@ function slider(label, get, set, min, max, step, fmt, dbl) {
   input.min = min; input.max = max; input.step = step; input.value = get();
   const show = v => val.textContent = fmt ? fmt(v) : v;
   show(get());
-  input.addEventListener('input', () => { set(parseFloat(input.value)); show(parseFloat(input.value)); scheduleRender(); });
+  input.addEventListener('input', () => {
+    S.fastPreview = true;                       // lighter preview while dragging
+    set(parseFloat(input.value));
+    show(parseFloat(input.value));
+    scheduleRender();
+  });
+  input.addEventListener('change', () => {
+    S.fastPreview = false;                      // full quality once released
+    scheduleRender();
+    scheduleSave();
+  });
   if (dbl) row.addEventListener('dblclick', e => {
     if (e.target === input) return;
     dbl();
@@ -1541,6 +1814,187 @@ function buildTransform(P, F) {
   }, 'primary'));
 }
 
+/* ----- CURVES: interactive tone-curve editor ----- */
+const CURVE_COLORS = { rgb: '#e9ebef', r: '#ff6b6b', g: '#5cd68a', b: '#6aa9ff' };
+
+function buildCurveEditor(a) {
+  const wrap = document.createElement('div');
+  wrap.className = 'curve-wrap';
+  let active = S.curveChannel || 'rgb';
+
+  const tabs = document.createElement('div');
+  tabs.className = 'curve-tabs';
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'curve-canvas';
+  canvas.width = 400; canvas.height = 400;
+  const ctx = canvas.getContext('2d');
+
+  function draw() {
+    const W = canvas.width, H = canvas.height;
+    ctx.fillStyle = '#0e1013';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(255,255,255,.07)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {
+      const t = i / 4 * W;
+      ctx.beginPath(); ctx.moveTo(t, 0); ctx.lineTo(t, H); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, t); ctx.lineTo(W, t); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,.13)';
+    ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(W, 0); ctx.stroke();
+
+    const lut = curveLUT(a.curve[active]);
+    ctx.strokeStyle = CURVE_COLORS[active];
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let x = 0; x < 256; x++) {
+      const px = x / 255 * W, py = H - (lut[x] / 255) * H;
+      if (x === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    a.curve[active].forEach(p => {
+      ctx.beginPath();
+      ctx.arc(p.x * W, H - p.y * H, 8, 0, Math.PI * 2);
+      ctx.fillStyle = CURVE_COLORS[active]; ctx.fill();
+      ctx.strokeStyle = '#0e1013'; ctx.lineWidth = 2.5; ctx.stroke();
+    });
+  }
+
+  CURVE_CH.forEach(ch => {
+    const t = document.createElement('button');
+    t.className = 'curve-tab' + (ch === active ? ' on' : '');
+    t.textContent = ch === 'rgb' ? 'RGB' : ch.toUpperCase();
+    t.style.setProperty('--c', CURVE_COLORS[ch]);
+    t.addEventListener('click', () => {
+      active = ch; S.curveChannel = ch;
+      tabs.querySelectorAll('.curve-tab').forEach(x => x.classList.toggle('on', x === t));
+      draw();
+    });
+    tabs.appendChild(t);
+  });
+
+  const toData = e => {
+    const r = canvas.getBoundingClientRect();
+    return { x: clamp((e.clientX - r.left) / r.width, 0, 1),
+             y: clamp(1 - (e.clientY - r.top) / r.height, 0, 1) };
+  };
+  const nearest = d => {
+    const pts = a.curve[active];
+    let best = -1, bestD = 0.07;
+    pts.forEach((p, i) => { const dd = Math.hypot(p.x - d.x, p.y - d.y); if (dd < bestD) { bestD = dd; best = i; } });
+    return best;
+  };
+
+  let drag = null;
+  canvas.addEventListener('pointerdown', e => {
+    const d = toData(e);
+    const pts = a.curve[active];
+    let idx = nearest(d);
+    if (idx < 0) {
+      pts.push(d);
+      pts.sort((p, q) => p.x - q.x);
+      idx = pts.indexOf(d);
+    }
+    drag = idx;
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (drag === null) return;
+    const pts = a.curve[active];
+    const d = toData(e);
+    const p = pts[drag];
+    if (drag === 0) p.x = 0;
+    else if (drag === pts.length - 1) p.x = 1;
+    else p.x = clamp(d.x, pts[drag - 1].x + 0.02, pts[drag + 1].x - 0.02);
+    p.y = d.y;
+    S.fastPreview = true;
+    draw(); scheduleRender();
+  });
+  const endDrag = () => {
+    if (drag === null) return;
+    drag = null;
+    S.fastPreview = false;
+    scheduleRender(); scheduleSave();
+  };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('dblclick', e => {
+    const pts = a.curve[active];
+    const idx = nearest(toData(e));
+    if (idx > 0 && idx < pts.length - 1) {
+      pts.splice(idx, 1);
+      draw(); scheduleRender(); scheduleSave();
+    }
+  });
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  const hint = document.createElement('div');
+  hint.className = 'curve-hint';
+  hint.textContent = 'Click to add a point, drag to shape it, double-click a point to remove it.';
+
+  const reset = document.createElement('button');
+  reset.className = 'curve-reset';
+  reset.textContent = 'Reset this channel';
+  reset.addEventListener('click', () => {
+    a.curve[active] = [{ x: 0, y: 0 }, { x: 1, y: 1 }];
+    draw(); scheduleRender(); scheduleSave();
+  });
+
+  wrap.appendChild(tabs);
+  wrap.appendChild(canvas);
+  wrap.appendChild(hint);
+  wrap.appendChild(reset);
+  draw();
+  return wrap;
+}
+
+/* ----- HSL: 8 colour ranges x hue / saturation / luminance ----- */
+const HSL_SWATCH = { red: '#e05252', orange: '#e08a45', yellow: '#d9c247', green: '#5cb87a',
+                     aqua: '#4fb3a5', blue: '#5a8fe0', purple: '#9a6fd0', magenta: '#d05fa8' };
+
+function buildHslPanel(a) {
+  const wrap = document.createElement('div');
+  let band = S.hslBand || 'red';
+
+  const rowSel = document.createElement('div');
+  rowSel.className = 'hsl-bands';
+  const box = document.createElement('div');
+  box.className = 'hsl-sliders';
+
+  function renderSliders() {
+    box.innerHTML = '';
+    ['Hue', 'Saturation', 'Luminance'].forEach((nm, i) => {
+      box.appendChild(slider(nm,
+        () => a.hsl[band][i],
+        v => { a.hsl[band][i] = v; },
+        -100, 100, 1, v => v,
+        () => { a.hsl[band][i] = 0; }));
+    });
+  }
+
+  HSL_BANDS.forEach(b => {
+    const c = document.createElement('button');
+    c.className = 'hsl-band' + (b.key === band ? ' on' : '');
+    c.textContent = b.label.slice(0, 3);
+    c.title = b.label;
+    c.style.setProperty('--c', HSL_SWATCH[b.key]);
+    c.addEventListener('click', () => {
+      band = b.key; S.hslBand = b.key;
+      rowSel.querySelectorAll('.hsl-band').forEach(x => x.classList.toggle('on', x === c));
+      renderSliders();
+    });
+    rowSel.appendChild(c);
+  });
+
+  wrap.appendChild(rowSel);
+  wrap.appendChild(box);
+  renderSliders();
+  return wrap;
+}
+
 /* ----- ADJUST ----- */
 function buildAdjust(P, F) {
   const a = A();
@@ -1548,7 +2002,10 @@ function buildAdjust(P, F) {
   const g0 = document.createElement('div');
   g0.className = 'grid2';
   g0.appendChild(chip('Auto enhance', false, autoEnhance));
-  g0.appendChild(chip('Reset all', false, () => { a.adj = defaultAdj(); buildPanel(); render(); }));
+  g0.appendChild(chip('Reset all', false, () => {
+    a.adj = defaultAdj(); a.curve = defaultCurve(); a.hsl = defaultHsl();
+    buildPanel(); render(); scheduleSave();
+  }));
   s0.appendChild(g0);
   P.appendChild(s0);
 
@@ -1568,6 +2025,16 @@ function buildAdjust(P, F) {
   s2.appendChild(slider('Hue shift', () => a.adj.hue, v => a.adj.hue = v, -180, 180, 1, v => v + '°', () => a.adj.hue = 0));
   P.appendChild(s2);
 
+  const sc = sec();
+  sc.appendChild(secLabel('Curves', 'drag the points'));
+  sc.appendChild(buildCurveEditor(a));
+  P.appendChild(sc);
+
+  const sh = sec();
+  sh.appendChild(secLabel('HSL / Color', 'by colour range'));
+  sh.appendChild(buildHslPanel(a));
+  P.appendChild(sh);
+
   const s3 = sec();
   s3.appendChild(secLabel('Detail & effects'));
   s3.appendChild(slider('Sharpen', () => a.adj.sharpen, v => a.adj.sharpen = v, 0, 100, 1, v => v, () => a.adj.sharpen = 0));
@@ -1579,18 +2046,35 @@ function buildAdjust(P, F) {
   P.appendChild(s3);
 
   F.innerHTML = '';
-  F.appendChild(mkBtn('Reset', () => { a.adj = defaultAdj(); buildPanel(); render(); }));
+  F.appendChild(mkBtn('Reset', () => {
+    a.adj = defaultAdj(); a.curve = defaultCurve(); a.hsl = defaultHsl();
+    buildPanel(); render(); scheduleSave();
+  }));
   F.appendChild(mkBtn('Apply', () => {
-    if (!adjChanged(a.adj)) { toast('No changes to apply'); return; }
-    pushOp({ type:'adj', adj: Object.assign({}, a.adj) });
-    a.adj = defaultAdj();
-    buildPanel(); render();
+    if (!liveChanged(a)) { toast('No changes to apply'); return; }
+    bakeLive(a);
     toast('Adjustments applied');
   }, 'primary'));
 }
 function adjChanged(adj) {
   const d = defaultAdj();
   return Object.keys(d).some(k => adj[k] !== d[k]);
+}
+/* is anything in the live (non-destructive) edit state different from neutral? */
+function liveChanged(a) {
+  return adjChanged(a.adj) || curveActive(a.curve) || hslActive(a.hsl);
+}
+/* bake the live adjustments into the edit stack; they stay re-editable because
+   the change becomes a step in history and the live controls return to neutral */
+function bakeLive(a) {
+  pushOp({ type: 'adj', adj: Object.assign({}, a.adj),
+           curve: JSON.parse(JSON.stringify(a.curve)),
+           hsl: JSON.parse(JSON.stringify(a.hsl)) });
+  a.adj = defaultAdj();
+  a.curve = defaultCurve();
+  a.hsl = defaultHsl();
+  buildPanel();
+  render();
 }
 function autoEnhance() {
   const a = A();
@@ -1647,10 +2131,8 @@ function buildFilters(P, F) {
   F.innerHTML = '';
   F.appendChild(mkBtn('Clear', () => { a.adj = defaultAdj(); buildPanel(); render(); }));
   F.appendChild(mkBtn('Apply', () => {
-    if (!adjChanged(a.adj)) { toast('Pick a preset first'); return; }
-    pushOp({ type:'adj', adj: Object.assign({}, a.adj) });
-    a.adj = defaultAdj();
-    buildPanel(); render();
+    if (!liveChanged(a)) { toast('Pick a preset first'); return; }
+    bakeLive(a);
     toast('Filter applied');
   }, 'primary'));
 }
@@ -1684,9 +2166,7 @@ function buildScan(P, F) {
   F.innerHTML = '';
   F.appendChild(mkBtn('Reset', () => { a.adj = defaultAdj(); buildPanel(); render(); }));
   F.appendChild(mkBtn('Apply scan', () => {
-    pushOp({ type:'adj', adj: Object.assign({}, a.adj) });
-    a.adj = defaultAdj();
-    buildPanel(); render();
+    bakeLive(a);
     toast('Scan applied');
   }, 'primary'));
 }
@@ -1911,7 +2391,8 @@ $('#btnRevert').addEventListener('click', () => {
   if (!a) { toast('Nothing to revert'); return; }
   if (a.index < 0 && !adjChanged(a.adj)) { toast('Already at the original'); return; }
   if (!confirm('Discard all edits and restore the original image?')) return;
-  a.ops = []; a.index = -1; a.adj = defaultAdj();
+  a.ops = []; a.index = -1;
+  a.adj = defaultAdj(); a.curve = defaultCurve(); a.hsl = defaultHsl();
   replay(); buildPanel();
   toast('Reverted to original');
 });
@@ -2003,7 +2484,7 @@ let exportBlob = null;
 function buildExportCanvas() {
   const a = A();
   const c = makeCanvas(a.source.width, a.source.height);
-  paint(c.getContext('2d'), a.source, c.width, c.height, a.adj);
+  paint(c.getContext('2d'), a.source, c.width, c.height, a.adj, a.curve, a.hsl);
   return c;
 }
 function renderExportEstimate() {
@@ -2054,7 +2535,10 @@ function toast(msg) {
 window.addEventListener('resize', () => { if (A()) render(); });
 buildPanel();
 updateHistoryUI();
-setTimeout(() => toast('Drop an image to start'), 400);
+// bring back the previous session — autosave doubles as crash recovery
+restoreSession().then(restored => {
+  if (!restored) setTimeout(() => toast('Drop an image to start'), 400);
+});
 </script>
 </body>
 </html>
