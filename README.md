@@ -55,9 +55,11 @@ Heavy pixel work (HSL, curves, sharpen) is done in a single tight loop over the 
 
 ## How updates work
 
-The service worker (`sw.js`) uses a **network-first strategy for the page itself**, so whenever you push a change to this repo it goes live the next time the app is opened — no store, no review, no waiting. Everything else is cache-first, so the app keeps working with no connection at all. When a new version takes over, the running page shows a *"New version ready — reopen to use it"* notice rather than reloading and discarding an edit in progress.
+The service worker (`sw.js`) uses a **network-first strategy for the page itself**, so whenever you push a change to this repo it goes live the next time the app is opened — no store, no review, no waiting. Everything else is cache-first, so the app keeps working with no connection at all.
 
-If you edit the precache list in `sw.js`, bump the `VERSION` constant.
+Users are told when there is something new. If a newer version reaches the device while the app is open, a banner appears at the top — *"Lumen Studio 1.0.1 is available — you are on 1.0.0"* — with **Reload** and **Later** buttons. Reload is never forced, so an edit in progress is never thrown away. The same state is shown in **Help → About**, which also has a **Check for updates** button.
+
+If you edit the precache list in `sw.js`, run `npm run validate` so CI catches anything that no longer exists.
 
 ## Security & privacy
 
@@ -69,12 +71,35 @@ If you edit the precache list in `sw.js`, bump the `VERSION` constant.
 
 *Note:* the inline script is allowed via `'unsafe-inline'` in `script-src`, which keeps the single file easy to edit by hand. If you want a hash-pinned policy instead, replace it with `script-src 'sha256-...'` — but you will then need to update the hash whenever the script changes.
 
+## Versioning and releases
+
+Versions follow [Semantic Versioning](https://semver.org/) and are **never written by hand**:
+
+```bash
+npm run release patch     # 1.1.0 -> 1.1.1   bug fixes, small errors, security fixes
+npm run release minor     # 1.1.1 -> 1.2.0   new features, backwards compatible
+npm run release major     # 1.2.0 -> 2.0.0   breaking changes
+```
+
+Each run computes the next version from `package.json`, refuses to reuse a tag that already exists, rewrites every piece of version metadata, generates release notes from the commit log, commits, and creates an annotated git tag. **It does not push or publish unless you pass `--push`** — see [`docs/RELEASING.md`](docs/RELEASING.md) for the full picture, including prereleases (`2.0.0-beta.1`) and releasing from GitHub Actions without a local checkout.
+
+The build number is a monotonically increasing integer that maps onto the native identifiers you will need later: Android `versionCode`, iOS `CFBundleVersion`, and the service-worker cache name.
+
 ## Files
 
 ```
 index.html              the whole application
 manifest.webmanifest    PWA metadata
 sw.js                   service worker (offline + updates)
+version.json            machine-readable version + build record
+package.json            version source of truth (no dependencies)
+CHANGELOG.md            generated from commit messages
+docs/RELEASING.md       how the release system works
+scripts/release.mjs     the release engine
+scripts/validate.mjs    consistency checks, also run by CI
+scripts/serve.mjs       local dev server (service workers need http://)
+scripts/lib/semver.mjs  dependency-free SemVer helpers
+.github/workflows/      release (manual, dry-run first) + validate on push
 favicon.ico
 icons/                  icon set (192, 512, maskable, apple-touch)
 ```

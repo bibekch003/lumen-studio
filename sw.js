@@ -3,14 +3,18 @@
    Offline-first app shell, but always tries the network for the page
    itself so a new push goes live on the very next open.
 
-   Bump VERSION when you change the precache list.
+   VERSION and BUILD are rewritten automatically by scripts/release.mjs.
+   Do not edit them by hand — and if you change the precache list below,
+   run `npm run validate` so CI catches anything that does not exist.
    ------------------------------------------------------------------ */
-const VERSION = 'v1';
+const VERSION = 'v1.0.0';
+const BUILD = 1;
 const CACHE = 'lumen-' + VERSION;
 
 const CORE = [
   './',
   './index.html',
+  './version.json',
   './manifest.webmanifest',
   './icons/icon-64.png',
   './icons/icon-192.png',
@@ -30,13 +34,26 @@ self.addEventListener('install', event => {
   );
 });
 
-/* activate: drop caches from previous versions */
+/* Tell every open page which version this worker is running, so the app can
+   say "a newer version is available" instead of silently running old code. */
+async function announceVersion() {
+  try {
+    const res = await caches.match('./version.json');
+    if (!res) return;
+    const info = await res.json();
+    const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+    clients.forEach(c => c.postMessage({ type: 'lumen-version', version: info.version, build: info.build }));
+  } catch (e) { /* nothing to announce */ }
+}
+
+/* activate: drop caches from previous versions, then announce */
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
+    await self.clients.claim();
+    await announceVersion();
+  })());
 });
 
 self.addEventListener('fetch', event => {
@@ -76,7 +93,8 @@ self.addEventListener('fetch', event => {
   );
 });
 
-/* let the page ask for an immediate takeover */
+/* let the page ask for an immediate takeover, or for the version */
 self.addEventListener('message', event => {
   if (event.data === 'skipWaiting') self.skipWaiting();
+  if (event.data === 'check-version') announceVersion();
 });

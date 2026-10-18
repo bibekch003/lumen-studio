@@ -1,0 +1,24 @@
+{
+  "name": "Lumen Studio",
+  "version": "1.0.0",
+  "build": 1,
+  "channel": "stable",
+  "releasedAt": "2026-10-18T00:00:00.000Z",
+  "platforms": {
+    "web": {
+      "cache": "lumen-v1.0.0"
+    },
+    "android": {
+      "versionName": "1.0.0",
+      "versionCode": 1
+    },
+    "ios": {
+      "CFBundleShortVersionString": "1.0.0",
+      "CFBundleVersion": "1"
+    },
+    "desktop": {
+      "version": "1.0.0",
+      "build": 1
+    }
+  }
+}

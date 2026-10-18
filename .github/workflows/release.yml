@@ -1,0 +1,90 @@
+name: Release
+
+# Manual only, on purpose: nothing is tagged, pushed or published until you
+# press the button. The default is a DRY RUN, so the first click is always safe.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump'
+        required: true
+        type: choice
+        options: [patch, minor, major]
+      prerelease:
+        description: 'Prerelease tag (beta, rc, alpha) — leave empty for a stable release'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry run: compute the version and show the notes, change nothing'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history and tags — the notes and version guard need them)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Validate the project before touching the version
+        run: node scripts/validate.mjs
+
+      - name: Compute the release
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS="${{ inputs.bump }}"
+          if [ -n "${{ inputs.prerelease }}" ]; then
+            ARGS="$ARGS --prerelease ${{ inputs.prerelease }}"
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          echo "node scripts/release.mjs $ARGS"
+          node scripts/release.mjs $ARGS
+
+      - name: Read the new version
+        if: ${{ inputs.dry_run == false }}
+        id: version
+        run: echo "version=$(node -p "require('./version.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Push the commit and the tag
+        if: ${{ inputs.dry_run == false }}
+        run: git push origin HEAD --follow-tags
+
+      - name: Publish the GitHub Release
+        if: ${{ inputs.dry_run == false }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          EXTRA=""
+          case "$VERSION" in
+            *-*) EXTRA="--prerelease" ;;
+          esac
+          gh release create "v$VERSION" \
+            --title "Lumen Studio v$VERSION" \
+            --notes-file RELEASE_NOTES.md \
+            $EXTRA

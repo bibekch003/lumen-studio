@@ -490,6 +490,33 @@ input[type=range]::-moz-range-thumb{
 .hsl-band:hover{background:var(--surface3);color:var(--text)}
 .hsl-band.on{background:var(--surface3);border-color:var(--c,#fff);color:var(--c,#fff)}
 
+/* ---------- update notification ---------- */
+#updateBar{
+  position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:160;
+  display:flex;align-items:center;gap:10px;padding:10px 12px;
+  width:calc(100% - 24px);max-width:560px;
+  background:var(--surface3);border:1px solid var(--accent-soft);border-radius:12px;
+  box-shadow:0 14px 40px rgba(0,0,0,.55);animation:ubIn .22s ease;
+}
+@keyframes ubIn{from{opacity:0;transform:translate(-50%,-10px)}to{opacity:1;transform:translate(-50%,0)}}
+#updateBar .ub-body{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+#updateBar b{font-size:13px;line-height:1.3}
+#updateBar span{font-size:11.5px;color:var(--dim)}
+#updateBar .tbtn{height:32px;flex:0 0 auto}
+html[data-ui="compact"] #updateBar{top:58px;padding:9px 10px;gap:8px}
+
+/* ---------- about panel ---------- */
+.about-card{display:flex;align-items:center;gap:12px}
+.about-logo{
+  width:46px;height:46px;border-radius:11px;flex:0 0 auto;
+  background-image:url('icons/icon-64.png'),linear-gradient(145deg,#233046,#0c0d10);
+  background-size:cover;background-position:center;
+  box-shadow:0 2px 12px rgba(120,150,220,.22),0 0 0 1px var(--border2);
+}
+.about-name{font-size:14px;font-weight:600}
+.about-ver{font-size:11.5px;color:var(--dim);font-family:var(--mono);margin-top:3px}
+.about-ver b{color:var(--text);font-weight:500}
+
 .hidden{display:none !important}
 
 
@@ -762,6 +789,20 @@ input[type=range]::-moz-range-thumb{
     </div>
     <div class="modal-body">
       <div class="sec">
+        <div class="sec-label">About</div>
+        <div class="about-card">
+          <div class="about-logo"></div>
+          <div>
+            <div class="about-name">Lumen Studio</div>
+            <div class="about-ver">Version <b id="aboutVersion">—</b> · build <b id="aboutBuild">—</b></div>
+          </div>
+        </div>
+        <div class="help-list" style="margin-top:12px">
+          <p id="aboutUpdateNote">You are running the latest version.</p>
+        </div>
+        <button class="curve-reset" id="aboutCheck" style="width:100%;margin-top:12px">Check for updates</button>
+      </div>
+      <div class="sec">
         <div class="sec-label">Keyboard</div>
         <div class="help-grid">
           <kbd>Ctrl + Z</kbd><span>Undo</span>
@@ -801,12 +842,29 @@ input[type=range]::-moz-range-thumb{
   </div>
 </div>
 
+<!-- UPDATE NOTIFICATION -->
+<div id="updateBar" class="hidden" role="status" aria-live="polite">
+  <div class="ub-body">
+    <b id="ubTitle">Update available</b>
+    <span id="ubMsg"></span>
+  </div>
+  <button class="tbtn primary" id="ubReload">Reload</button>
+  <button class="tbtn" id="ubLater">Later</button>
+</div>
+
 <div id="toast"><span class="dot"></span><span id="toastMsg"></span></div>
 
 <script>
 /* =========================================================
    Lumen Studio — client-side image editor
    ========================================================= */
+
+/* Version metadata. Rewritten automatically by scripts/release.mjs — never
+   edit these by hand. They are baked into the page because the app runs under
+   connect-src 'none' and therefore cannot fetch version.json at runtime. */
+const APP_VERSION = '1.0.0';
+const APP_BUILD = 1;
+
 const $ = s => document.querySelector(s);
 
 /* ---------- canvas helpers ---------- */
@@ -2368,13 +2426,64 @@ window.addEventListener('appinstalled', () => {
   toast('Lumen Studio installed');
 });
 
+/* ---------- version display + update notification ---------- */
+$('#aboutVersion').textContent = APP_VERSION;
+$('#aboutBuild').textContent = APP_BUILD;
+
+let pendingVersion = null;
+function showUpdate(version) {
+  if (version && version === APP_VERSION) return;   // already current
+  pendingVersion = version || null;
+  $('#ubTitle').textContent = version ? ('Lumen Studio ' + version + ' is available') : 'An update is available';
+  $('#ubMsg').textContent = 'You are on ' + APP_VERSION + '. Reload to update.';
+  $('#updateBar').classList.remove('hidden');
+  const n = $('#aboutUpdateNote');
+  if (n) n.textContent = version
+    ? 'Version ' + version + ' is available — reload to update.'
+    : 'A newer version is available — reload to update.';
+}
+$('#ubLater').addEventListener('click', () => $('#updateBar').classList.add('hidden'));
+$('#ubReload').addEventListener('click', () => {
+  $('#ubReload').textContent = 'Updating…';
+  try {
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (reg && reg.waiting) reg.waiting.postMessage('skipWaiting');
+      setTimeout(() => location.reload(), 250);
+    }).catch(() => location.reload());
+  } catch (e) { location.reload(); }
+});
+$('#aboutCheck').addEventListener('click', async () => {
+  const note = $('#aboutUpdateNote');
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) { note.textContent = 'Update checks need the app served over https, or installed.'; return; }
+    note.textContent = 'Checking…';
+    await reg.update();
+    setTimeout(() => {
+      if (!pendingVersion) note.textContent = 'You are running the latest version (' + APP_VERSION + ').';
+    }, 1500);
+  } catch (e) { note.textContent = 'Could not check for updates right now.'; }
+});
+
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   const hadController = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // a newer version has taken over: tell the user rather than yanking the
-    // page out from under an edit that is in progress
-    if (hadController) toast('New version ready — reopen to use it');
+
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data && e.data.type === 'lumen-version') showUpdate(e.data.version);
   });
+
+  // a newer worker has taken over: offer the reload rather than yanking the
+  // page out from under an edit that is in progress
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController) showUpdate(pendingVersion);
+  });
+
+  // ask the active worker which version it is running (it may have taken over
+  // before this page attached its listener)
+  navigator.serviceWorker.ready.then(reg => {
+    if (reg.active) reg.active.postMessage('check-version');
+  }).catch(() => {});
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').then(reg => reg.update()).catch(() => {});
   });

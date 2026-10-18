@@ -1,0 +1,31 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Fails if the version disagrees between files, if the manifest points at
+      # a missing icon, or if the service worker precaches a file that is not
+      # in the repo (which would break offline install).
+      - name: Validate the project
+        run: node scripts/validate.mjs
+
+      - name: Check the release script is syntactically valid
+        run: |
+          node --check scripts/release.mjs
+          node --check scripts/validate.mjs
+          node --check scripts/serve.mjs
+          node --check scripts/lib/semver.mjs
