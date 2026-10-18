@@ -1,0 +1,49 @@
+{
+  "name": "Lumen Studio — Image Editor",
+  "short_name": "Lumen Studio",
+  "description": "Crop, resize, rotate, adjust, filter, scan, frame and watermark images — entirely in your browser. Nothing is ever uploaded.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
+  "background_color": "#0c0d10",
+  "theme_color": "#0c0d10",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": [
+    "photo",
+    "graphics",
+    "productivity",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
