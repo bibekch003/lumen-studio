@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lumen Studio — Image Editor</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; media-src 'none'; manifest-src 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -194,9 +195,11 @@ button,input,select{font-family:inherit;color:inherit}
 
 /* ---------- panel ---------- */
 .panel{
+  position:relative;
   width:308px;flex:0 0 auto;background:var(--surface);
   border-left:1px solid var(--border);display:flex;flex-direction:column;min-height:0;z-index:30;
 }
+.panel.collapsed{display:none}
 .panel-head{
   position:relative;
   padding:15px 16px 12px;border-bottom:1px solid var(--border);flex:0 0 auto;
@@ -207,17 +210,38 @@ button,input,select{font-family:inherit;color:inherit}
   font-size:17px;line-height:1;cursor:pointer;display:none;place-items:center;
 }
 .panel-close:hover{background:var(--surface3);color:var(--text)}
-#btnPanelToggle{display:none}
+.panel-resizer{
+  position:absolute;left:-4px;top:0;bottom:0;width:9px;cursor:col-resize;z-index:6;
+  display:flex;align-items:center;justify-content:center;touch-action:none;
+}
+.panel-resizer::after{
+  content:'';width:2px;height:40px;border-radius:2px;background:var(--border2);
+  opacity:0;transition:opacity .15s,background .15s;
+}
+.panel-resizer:hover::after,.panel.dragging .panel-resizer::after{opacity:1;background:var(--accent)}
+.panel.dragging{user-select:none}
+.sheet-grip{display:none;justify-content:center;padding:9px 0 3px;flex:0 0 auto;cursor:pointer}
+.sheet-grip span{width:40px;height:4px;border-radius:2px;background:var(--border2)}
+.tbtn.icon{padding:0 9px}
+.help-grid{display:grid;grid-template-columns:auto 1fr;gap:11px 14px;align-items:center}
+.help-grid kbd{
+  font-family:var(--mono);font-size:10.5px;background:var(--surface3);padding:3px 8px;border-radius:5px;
+  border:1px solid var(--border2);color:var(--text);white-space:nowrap;justify-self:start;
+}
+.help-grid span{font-size:12.5px;color:var(--dim)}
+.help-list{display:flex;flex-direction:column;gap:10px}
+.help-list p{font-size:12.5px;color:var(--dim);line-height:1.55}
+.help-list b{color:var(--text);font-weight:600}
 .panel-head .eyebrow{
   font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
   color:var(--dim2);margin-bottom:5px;
 }
 .panel-head h3{font-size:15px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
 .panel-head h3 .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent-soft)}
-.panel-body{flex:1;overflow-y:auto;padding:14px 16px 90px}
+.panel-body{flex:1;overflow-y:auto;padding:14px 16px 18px}
 .panel-foot{
-  position:absolute;bottom:0;left:0;right:0;
-  padding:12px 16px;background:linear-gradient(transparent,var(--surface) 30%);
+  flex:0 0 auto;
+  padding:12px 16px;background:var(--surface);
   display:flex;gap:8px;border-top:1px solid var(--border);
 }
 .panel-foot .tbtn{flex:1;height:36px}
@@ -402,17 +426,58 @@ input[type=range]::-moz-range-thumb{
 .hidden{display:none !important}
 
 @media (max-width:820px){
-  .panel{position:fixed;right:0;top:54px;bottom:0;width:290px;transform:translateX(100%);transition:.2s;box-shadow:-14px 0 40px rgba(0,0,0,.5)}
-  .panel.open{transform:none}
-  .rail{width:56px}
-  .rail-btn{margin:0 5px;font-size:9px}
+  /* Phone layout: image stays fully visible — the tools dock below it in normal
+     flow (a bottom sheet) instead of floating over the canvas. */
+  .topbar{height:50px;padding:0 10px;gap:8px}
+  .body{flex-direction:column}
+  .stage{order:1;overscroll-behavior:contain}
+  .panel{
+    order:2;width:auto;max-height:42vh;border-left:none;
+    border-top:1px solid var(--border);display:none;
+    box-shadow:0 -14px 40px rgba(0,0,0,.5);
+  }
+  .panel.open{display:flex;animation:sheetUp .2s ease}
+  .panel-resizer{display:none}
+  .sheet-grip{display:flex}
+  .panel-body{padding:12px 14px 14px}
+  .panel-head{padding:12px 14px 10px}
+  .rail{
+    order:3;width:100%;height:66px;flex-direction:row;align-items:center;gap:4px;
+    border-right:none;border-top:1px solid var(--border);
+    overflow-x:auto;overflow-y:hidden;padding:6px 8px;scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+  .rail::-webkit-scrollbar{display:none}
+  .rail-btn{flex:0 0 auto;margin:0;min-width:58px;padding:7px 4px;font-size:9.5px}
+  .rail-btn.on::before{display:none}
   .doc-name{display:none}
-  .brand .name span{display:none}
-  #btnPanelToggle{display:inline-flex}
+  .brand .name{display:none}
+  .brand{padding-right:8px}
   .tbtn .lbl{display:none}
   .tbtn.primary .lbl{display:inline}
   .panel-close{display:grid}
-  .rail-btn.on::before{display:none}
+  .filmstrip{height:60px;padding:0 10px;gap:8px}
+  .thumb,.fs-add{height:44px;width:44px}
+  .empty .drop{padding:26px 22px}
+  .zoombar{bottom:10px;padding:3px}
+  .zoombar button{height:26px;min-width:26px;font-size:11px}
+  /* toasts drop in from under the top bar so they never sit on the tool sheet */
+  #toast{top:60px;bottom:auto;transform:translate(-50%,-14px)}
+  #toast.show{transform:translate(-50%,0)}
+  .hnd{width:20px;height:20px;border-radius:5px}
+  .hnd[data-h="nw"]{left:-10px;top:-10px}
+  .hnd[data-h="ne"]{right:-10px;top:-10px}
+  .hnd[data-h="sw"]{left:-10px;bottom:-10px}
+  .hnd[data-h="se"]{right:-10px;bottom:-10px}
+  .hnd[data-h="n"]{left:50%;top:-10px;transform:translateX(-50%)}
+  .hnd[data-h="s"]{left:50%;bottom:-10px;transform:translateX(-50%)}
+  .hnd[data-h="w"]{left:-10px;top:50%;transform:translateY(-50%)}
+  .hnd[data-h="e"]{right:-10px;top:50%;transform:translateY(-50%)}
+}
+@keyframes sheetUp{from{transform:translateY(16px);opacity:.5}to{transform:none;opacity:1}}
+@media (max-width:380px){
+  .rail-btn{min-width:52px;font-size:9px}
+  .panel{max-height:50vh}
 }
 </style>
 </head>
@@ -440,6 +505,13 @@ input[type=range]::-moz-range-thumb{
       <div class="doc-name" id="docName">No image</div>
     </div>
     <div class="top-right">
+      <button class="tbtn" id="btnRevert" title="Revert all edits to the original">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v6h6"/><path d="M3.5 9a9 9 0 1 1-1 8.5"/></svg>
+        <span class="lbl">Revert</span>
+      </button>
+      <button class="tbtn icon" id="btnHelp" title="Help &amp; shortcuts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.4 2.4 0 1 1 3.2 2.2c-.7.3-1.1.9-1.1 1.6v.3"/><path d="M11.7 16.8h.01"/></svg>
+      </button>
       <button class="tbtn" id="btnOpen" title="Open images">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
         <span class="lbl">Open</span>
@@ -494,6 +566,8 @@ input[type=range]::-moz-range-thumb{
 
     <!-- RIGHT PANEL -->
     <aside class="panel" id="panel">
+      <div class="panel-resizer" id="panelResizer" title="Drag to resize"></div>
+      <div class="sheet-grip" id="sheetGrip" title="Collapse"><span></span></div>
       <div class="panel-head">
         <div class="eyebrow" id="panelEyebrow">Tool</div>
         <h3><span class="dot"></span><span id="panelTitle">Crop</span></h3>
@@ -551,6 +625,45 @@ input[type=range]::-moz-range-thumb{
     <div class="modal-foot">
       <button class="tbtn" id="expCancel">Cancel</button>
       <button class="tbtn primary" id="expGo">Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- HELP MODAL -->
+<div class="overlay" id="helpOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Help &amp; shortcuts</h3>
+      <button class="x" id="helpClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="sec">
+        <div class="sec-label">Keyboard</div>
+        <div class="help-grid">
+          <kbd>Ctrl + Z</kbd><span>Undo</span>
+          <kbd>Ctrl + Shift + Z</kbd><span>Redo</span>
+          <kbd>Ctrl + S</kbd><span>Export the image</span>
+          <kbd>Ctrl + V</kbd><span>Paste an image from the clipboard</span>
+          <kbd>+ / −</kbd><span>Zoom in / out</span>
+          <kbd>0</kbd><span>Fit the image to the screen</span>
+          <kbd>Enter</kbd><span>Apply the current crop</span>
+          <kbd>Esc</kbd><span>Reset the crop selection</span>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-label">Tips</div>
+        <div class="help-list">
+          <p><b>Hold Compare</b> to peek at the original image at any time.</p>
+          <p><b>Drag the panel edge</b> (desktop) to widen the tools, or hide them entirely with the sliders button in the top bar.</p>
+          <p><b>Double-click a slider label</b> to reset that single control.</p>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-label">Privacy &amp; security</div>
+        <div class="help-list">
+          <p><b>Fully offline.</b> Every edit runs in your browser — your images are never uploaded. The page is locked down with a strict Content-Security-Policy that blocks outbound connections, plugins and framing.</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -812,7 +925,8 @@ function render() {
   const a = A();
   if (!a) return;
   const stage = $('#stage');
-  const pad = 90;
+  // tighter padding on phones so the photo gets as much of the screen as possible
+  const pad = window.innerWidth <= 820 ? 24 : 90;
   const availW = Math.max(80, stage.clientWidth - pad);
   const availH = Math.max(80, stage.clientHeight - pad);
   const fit = Math.min(availW / a.source.width, availH / a.source.height, 1);
@@ -957,6 +1071,7 @@ function loadFiles(files) {
   let pending = 0, started = false;
   Array.from(files).forEach(f => {
     if (!f.type || !f.type.startsWith('image/')) return;
+    if (f.size > 60 * 1024 * 1024) { toast('Skipped ' + f.name + ' — larger than 60 MB'); return; }
     pending++; started = true;
     const reader = new FileReader();
     reader.onload = () => {
@@ -1007,7 +1122,16 @@ function refreshFilmstrip() {
   S.images.forEach((im, i) => {
     const t = document.createElement('div');
     t.className = 'thumb' + (i === S.activeIdx ? ' on' : '');
-    t.innerHTML = '<img src="' + im.src + '" alt=""><button class="rm" title="Remove">&times;</button>';
+    // built with the DOM API (no innerHTML) so file names can never inject markup
+    const img = document.createElement('img');
+    img.alt = im.name || 'image';
+    img.src = im.src;
+    const rm = document.createElement('button');
+    rm.className = 'rm';
+    rm.title = 'Remove';
+    rm.textContent = '\u00d7';
+    t.appendChild(img);
+    t.appendChild(rm);
     t.addEventListener('click', e => {
       if (e.target.classList.contains('rm')) {
         e.stopPropagation();
@@ -1140,7 +1264,15 @@ function buildPanel() {
       b.className = 'rail-btn';
       b.dataset.tool = t.id;
       b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + ICONS[t.id] + '</svg><span>' + t.name + '</span>';
-      b.addEventListener('click', () => { S.tool = t.id; buildPanel(); render(); openPanel(); });
+      b.addEventListener('click', () => {
+        const wasActive = S.tool === t.id;
+        S.tool = t.id;
+        buildPanel();
+        render();
+        // on phones, tapping the active tool again collapses the sheet
+        if (isMobile() && wasActive && $('#panel').classList.contains('open')) closePanel();
+        else openPanel();
+      });
       rail.appendChild(b);
     });
     rail.dataset.built = '1';
@@ -1564,12 +1696,77 @@ $('#zOne').addEventListener('click', () => setZoom(1 / (S.lastFit || 1)));
 $('#zVal').addEventListener('click', () => setZoom(1));
 
 /* ---------- top bar actions ---------- */
+/* ---------- layout: panel show / hide / resize / mobile sheet ---------- */
 const isMobile = () => window.matchMedia('(max-width: 820px)').matches;
-function openPanel() { if (isMobile()) $('#panel').classList.add('open'); }
-function closePanel() { $('#panel').classList.remove('open'); }
-$('#btnPanelToggle').addEventListener('click', () => $('#panel').classList.toggle('open'));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('lumen.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('lumen.' + k, JSON.stringify(v)); } catch (e) {} }
+};
+const panelEl = $('#panel');
+
+function refit() { if (A()) requestAnimationFrame(render); }
+function panelVisible() { return isMobile() ? panelEl.classList.contains('open') : !panelEl.classList.contains('collapsed'); }
+function setPanel(v) {
+  if (isMobile()) { panelEl.classList.toggle('open', v); panelEl.classList.remove('collapsed'); }
+  else { panelEl.classList.toggle('collapsed', !v); panelEl.classList.remove('open'); }
+  refit();
+}
+function openPanel() { setPanel(true); }
+function closePanel() { setPanel(false); }
+function togglePanel() { setPanel(!panelVisible()); }
+
+$('#btnPanelToggle').addEventListener('click', togglePanel);
 $('#panelClose').addEventListener('click', closePanel);
-window.addEventListener('resize', () => { if (!isMobile()) closePanel(); });
+$('#sheetGrip').addEventListener('click', closePanel);
+
+/* resizable panel — desktop only; on phones the sheet always fills the width */
+function applyPanelWidth() {
+  if (isMobile()) { panelEl.style.width = ''; return; }
+  const w = store.get('panelWidth', 308);
+  panelEl.style.width = w ? clamp(w, 260, 560) + 'px' : '';
+}
+applyPanelWidth();
+(function () {
+  const rz = $('#panelResizer');
+  let dragging = false;
+  rz.addEventListener('pointerdown', e => {
+    if (isMobile()) return;
+    dragging = true;
+    panelEl.classList.add('dragging');
+    try { rz.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  });
+  window.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    panelEl.style.width = clamp(window.innerWidth - e.clientX, 260, 560) + 'px';
+    refit();
+  });
+  window.addEventListener('pointerup', () => {
+    if (!dragging) return;
+    dragging = false;
+    panelEl.classList.remove('dragging');
+    store.set('panelWidth', Math.round(panelEl.getBoundingClientRect().width));
+  });
+})();
+
+window.addEventListener('resize', () => { applyPanelWidth(); refit(); });
+window.addEventListener('orientationchange', () => setTimeout(() => { applyPanelWidth(); refit(); }, 250));
+
+/* ---------- help ---------- */
+$('#btnHelp').addEventListener('click', () => $('#helpOverlay').classList.add('show'));
+$('#helpClose').addEventListener('click', () => $('#helpOverlay').classList.remove('show'));
+$('#helpOverlay').addEventListener('click', e => { if (e.target === $('#helpOverlay')) $('#helpOverlay').classList.remove('show'); });
+
+/* ---------- revert everything ---------- */
+$('#btnRevert').addEventListener('click', () => {
+  const a = A();
+  if (!a) { toast('Nothing to revert'); return; }
+  if (a.index < 0 && !adjChanged(a.adj)) { toast('Already at the original'); return; }
+  if (!confirm('Discard all edits and restore the original image?')) return;
+  a.ops = []; a.index = -1; a.adj = defaultAdj();
+  replay(); buildPanel();
+  toast('Reverted to original');
+});
 
 $('#btnUndo').addEventListener('click', undo);
 $('#btnRedo').addEventListener('click', redo);
@@ -1679,7 +1876,9 @@ $('#expGo').addEventListener('click', () => {
   const a = A(); if (!a) return;
   const c = buildExportCanvas();
   const ext = { 'image/png':'png', 'image/jpeg':'jpg', 'image/webp':'webp', 'image/avif':'avif' }[S.exportFormat] || 'png';
-  const name = ($('#expName').value.trim() || 'image') + '.' + ext;
+  // strip anything that could escape the download folder or break the file name
+  const safe = ($('#expName').value.trim() || 'image').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').slice(0, 120) || 'image';
+  const name = safe + '.' + ext;
   const type = S.exportFormat;
   c.toBlob(b => {
     if (!b) { toast('Export failed — try a different format'); return; }
