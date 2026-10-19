@@ -25,9 +25,24 @@ Plus: multi-image filmstrip, full undo/redo, hold-to-Compare against the origina
 
 The top bar keeps **Add** and **Remove** next to Export, so managing images never means hunting through menus.
 
+## Settings
+
+Tap the gear beside the logo. Everything is stored locally and takes effect immediately:
+
+| Setting | What it does |
+|---|---|
+| **Theme** | System, Light or Dark. The theme is applied before the first paint, so there is no flash on load |
+| **Reduce transparency** | Drops the frosted blur. The single biggest speed-up on older phones |
+| **Reduce motion** | Stops the logo glow and the panel animations |
+| **Preview quality** | Fast / Balanced / High — how much work goes into the live preview. Exports are always full resolution |
+| **Default format** | What the export dialog opens with |
+| **Autosave** | Keeps your session so a crash or refresh never loses work |
+| **Clear all** | Wipes the library and the session from this device |
+
 ## Your library
 
-**Help → nothing to hunt for: tap the logo.** The logo in the top bar opens your library — every image you
+The library has a **search box**, a **newest / name sort**, and shows how much is stored on the device.
+**Nothing to hunt for: tap the logo.** The logo in the top bar opens your library — every image you
 export is filed there automatically, with the edit state intact, so you can reopen it later and keep working
 on it non-destructively rather than starting from a flattened copy. It is stored in the browser's IndexedDB:
 local, offline, and never uploaded.
