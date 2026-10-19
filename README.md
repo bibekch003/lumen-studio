@@ -13,15 +13,27 @@ It is also an installable **Progressive Web App**: open the site, tap **Install*
 | **Crop** | Draggable / resizable frame with rule-of-thirds guides, live pixel readout, aspect-ratio locks (Free, 1:1, 4:3, 3:2, 16:9, 9:16, 4:5) |
 | **Resize** | Width / height with aspect lock, plus quick 25–400% presets |
 | **Transform** | Rotate 90 deg left/right, flip horizontal/vertical, straighten slider (-45 to +45 deg) that auto-expands the canvas |
-| **Adjust** | Brightness, contrast, exposure, saturation, temperature, tint, hue, fade, sharpen, blur, vignette, grayscale, sepia, invert + one-click Auto enhance |
+| **Adjust** | Brightness, contrast, exposure, saturation, temperature, tint, hue, fade, sharpen, posterize, blur, vignette, grayscale, sepia, invert + one-click Auto enhance |
 | **Curves** | Interactive tone-curve editor — RGB composite plus separate R, G and B channels. Click to add a point, drag to shape it, double-click to remove. Monotone cubic interpolation, so the curve never overshoots |
 | **HSL** | Per-colour-range grading across 8 bands (reds, oranges, yellows, greens, aquas, blues, purples, magentas), each with hue, saturation and luminance |
-| **Filters** | 14 live-thumbnail presets (Vivid, Warm, Cool, Fade, Noir, Vintage, Cinematic, Punch, Matte, Film and more) |
+| **Filters** | 15 live-thumbnail presets (Anime, Vivid, Warm, Cool, Fade, Noir, Vintage, Cinematic, Punch, Matte, Film and more) |
 | **Scan** | Document, B&W Text, Grayscale, Whiteboard, Color Scan and Receipt modes with a threshold slider for crisp text |
 | **Frame** | Solid border with thickness control and a colour picker |
 | **Watermark** | Text watermark with size, opacity, colour, 9-point position grid and a diagonal option |
 
 Plus: multi-image filmstrip, full undo/redo, hold-to-Compare against the original, one-click **Revert to original**, fit / 1:1 / zoom controls, and export to **PNG, JPG, WEBP or AVIF** with quality control.
+
+## Interface
+
+The chrome is iOS-style glass: translucent bars that float over the canvas, with the frosted blur
+reserved for that chrome — never the image, so the GPU cost stays on small surfaces.
+
+A **style bar** floats along the bottom of the canvas with every preset one tap away. Tapping a pill
+previews it live; **Apply** commits it to history as a single step. A pill only stays lit while the
+adjustments exactly match that preset, so the bar always tells the truth about what you are looking at.
+
+Glass needs something behind it to blur, so the app sits on a soft radial gradient rather than flat black.
+The type stack prefers the real system font (SF Pro on iPhone and Mac) and falls back to Figtree elsewhere.
 
 ## Non-destructive editing
 
