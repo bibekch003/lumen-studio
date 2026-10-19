@@ -1,4 +1,4 @@
-## v1.1.1 — 2026-10-19
+## v1.2.0 — 2026-10-19
 
-### Bug fixes
-- stop the render freezes that froze and crashed the tab, and repair the update notification ([`e6a59e7`](https://github.com/bibekch003/lumen-studio/commit/e6a59e7))
+### Features
+- iOS glass interface with a live style bar, plus an Anime preset and posterize ([`0a3801d`](https://github.com/bibekch003/lumen-studio/commit/0a3801d))
