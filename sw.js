@@ -34,13 +34,21 @@ self.addEventListener('install', event => {
   );
 });
 
+/* This worker's own version record. It is precached, so it works offline. */
+async function versionInfo() {
+  try {
+    const res = await caches.match('./version.json');
+    if (res) return await res.json();
+  } catch (e) { /* fall through */ }
+  return { version: null, build: null };
+}
+
 /* Tell every open page which version this worker is running, so the app can
    say "a newer version is available" instead of silently running old code. */
 async function announceVersion() {
+  const info = await versionInfo();
+  if (!info.version) return;
   try {
-    const res = await caches.match('./version.json');
-    if (!res) return;
-    const info = await res.json();
     const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
     clients.forEach(c => c.postMessage({ type: 'lumen-version', version: info.version, build: info.build }));
   } catch (e) { /* nothing to announce */ }
@@ -93,8 +101,23 @@ self.addEventListener('fetch', event => {
   );
 });
 
-/* let the page ask for an immediate takeover, or for the version */
+/* The page can ask for an immediate takeover, or for the version.
+   "get-version" carries a message port so the page gets a direct reply and
+   never has to wait for a broadcast that may never come. */
 self.addEventListener('message', event => {
-  if (event.data === 'skipWaiting') self.skipWaiting();
-  if (event.data === 'check-version') announceVersion();
+  const data = event.data;
+  if (data === 'skipWaiting') { self.skipWaiting(); return; }
+
+  const wantsVersion = data === 'check-version' || (data && data.type === 'get-version');
+  if (!wantsVersion) return;
+
+  const reply = versionInfo().then(info => {
+    if (event.ports && event.ports[0]) {
+      event.ports[0].postMessage({ version: info.version, build: info.build });
+    } else {
+      self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
+        .then(cs => cs.forEach(c => c.postMessage({ type: 'lumen-version', version: info.version, build: info.build })));
+    }
+  });
+  if (event.waitUntil) event.waitUntil(reply);
 });

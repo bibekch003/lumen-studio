@@ -506,6 +506,7 @@ input[type=range]::-moz-range-thumb{
 html[data-ui="compact"] #updateBar{top:58px;padding:9px 10px;gap:8px}
 
 /* ---------- about panel ---------- */
+.ud-text{font-size:13px;color:var(--dim);line-height:1.65}
 .about-card{display:flex;align-items:center;gap:12px}
 .about-logo{
   width:46px;height:46px;border-radius:11px;flex:0 0 auto;
@@ -842,6 +843,18 @@ html[data-ui="compact"] #updateBar{top:58px;padding:9px 10px;gap:8px}
   </div>
 </div>
 
+<!-- UPDATE RESULT DIALOG -->
+<div class="overlay" id="updateDialog">
+  <div class="modal" style="max-width:430px">
+    <div class="modal-head">
+      <h3 id="udTitle">Update</h3>
+      <button class="x" id="udClose">&times;</button>
+    </div>
+    <div class="modal-body"><p id="udBody" class="ud-text"></p></div>
+    <div class="modal-foot" id="udActions"></div>
+  </div>
+</div>
+
 <!-- UPDATE NOTIFICATION -->
 <div id="updateBar" class="hidden" role="status" aria-live="polite">
   <div class="ub-body">
@@ -1018,11 +1031,18 @@ async function idbDel(key) {
   } catch (e) {}
 }
 
-let saveTimer = null, restoring = false;
-function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveSession, 1200); }
+let saveTimer = null, restoring = false, lastSaveSig = '';
+/* autosave writes the original blobs, so never do it more often than needed */
+function sessionSignature() {
+  return JSON.stringify(S.images.map(im => [im.name, im.index, im.ops.length, im.adj, im.curve, im.hsl]));
+}
+function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveSession, 2000); }
 
 async function saveSession() {
   try {
+    const sig = sessionSignature();
+    if (sig === lastSaveSig) return;      // nothing actually changed
+    lastSaveSig = sig;
     const recs = [];
     for (const im of S.images) {
       if (!im.blob) continue;
@@ -1066,7 +1086,12 @@ async function restoreSession() {
 const needsPixel = (a, curve, hsl) => !!(a.exposure || a.temperature || a.tint || a.fade ||
   a.vignette || a.threshold || a.sharpen) || curveActive(curve) || hslActive(hsl);
 
-function pixelOps(ctx, w, h, a, curve, hsl) {
+/* The hot loop of the whole app. Two things matter here:
+   - no Math.hypot and no (i/4)%w per pixel (both were measured as the single
+     biggest costs); distances come from precomputed row/column tables
+   - HSL only pays for the full RGB -> HSL -> RGB round trip when the hue
+     actually moves; saturation/luminance alone take a linear path          */
+function pixelOps(ctx, w, h, a, curve, hsl, skipSharpen) {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
   const ex = Math.pow(2, a.exposure / 100);
@@ -1074,7 +1099,6 @@ function pixelOps(ctx, w, h, a, curve, hsl) {
   const fd = a.fade / 100;
   const th = a.threshold;
   const vig = a.vignette / 100;
-  const cx = w / 2, cy = h / 2, maxd = Math.hypot(cx, cy) || 1;
 
   const useC = curveActive(curve);
   let Lrgb, Lr, Lg, Lb;
@@ -1082,6 +1106,18 @@ function pixelOps(ctx, w, h, a, curve, hsl) {
   const useH = hslActive(hsl);
   const hueTab = useH ? buildHueTable(hsl) : null;
 
+  /* vignette: squared distance per row and per column, so the inner loop is
+     two array reads and a multiply — no sqrt, no hypot */
+  let vx = null, vy = null, vinv = 0;
+  if (vig) {
+    const cx = w / 2, cy = h / 2;
+    vinv = vig / ((cx * cx + cy * cy) || 1);
+    vx = new Float32Array(w); vy = new Float32Array(h);
+    for (let x = 0; x < w; x++) { const dx = x + 0.5 - cx; vx[x] = dx * dx; }
+    for (let y = 0; y < h; y++) { const dy = y + 0.5 - cy; vy[y] = dy * dy; }
+  }
+
+  let px = 0, py = 0;
   for (let i = 0; i < d.length; i += 4) {
     let r = d[i], g = d[i+1], b = d[i+2];
     if (ex !== 1) { r *= ex; g *= ex; b *= ex; }
@@ -1097,42 +1133,50 @@ function pixelOps(ctx, w, h, a, curve, hsl) {
     }
 
     if (useH) {
-      const rn = r / 255, gn = g / 255, bn = b / 255;
+      const rn = r * (1 / 255), gn = g * (1 / 255), bn = b * (1 / 255);
       const mx = rn > gn ? (rn > bn ? rn : bn) : (gn > bn ? gn : bn);
       const mn = rn < gn ? (rn < bn ? rn : bn) : (gn < bn ? gn : bn);
-      let H = 0, S = 0, L = (mx + mn) / 2;
       const dd = mx - mn;
       if (dd > 1e-6) {
-        S = L > 0.5 ? dd / (2 - mx - mn) : dd / (mx + mn);
+        let H;
         if (mx === rn) H = ((gn - bn) / dd) % 6;
         else if (mx === gn) H = (bn - rn) / dd + 2;
         else H = (rn - gn) / dd + 4;
         H *= 60; if (H < 0) H += 360;
-      }
-      if (S > 1e-6) {
         const hi = H | 0;
         const dh = hueTab[hi * 3], ds = hueTab[hi * 3 + 1], dl = hueTab[hi * 3 + 2];
         if (dh || ds || dl) {
-          H += dh * 0.5; H = ((H % 360) + 360) % 360;
-          S = S * (1 + ds / 100); S = S < 0 ? 0 : S > 1 ? 1 : S;
-          L = L + dl / 200; L = L < 0 ? 0 : L > 1 ? 1 : L;
-          const q = L < 0.5 ? L * (1 + S) : L + S - L * S;
-          const p = 2 * L - q;
-          let tr = H / 360 + 1 / 3, tg = H / 360, tb = H / 360 - 1 / 3;
-          if (tr < 0) tr += 1; if (tr > 1) tr -= 1;
-          if (tg < 0) tg += 1; if (tg > 1) tg -= 1;
-          if (tb < 0) tb += 1; if (tb > 1) tb -= 1;
-          r = 255 * (tr < 1/6 ? p + (q - p) * 6 * tr : tr < 1/2 ? q : tr < 2/3 ? p + (q - p) * (2/3 - tr) * 6 : p);
-          g = 255 * (tg < 1/6 ? p + (q - p) * 6 * tg : tg < 1/2 ? q : tg < 2/3 ? p + (q - p) * (2/3 - tg) * 6 : p);
-          b = 255 * (tb < 1/6 ? p + (q - p) * 6 * tb : tb < 1/2 ? q : tb < 2/3 ? p + (q - p) * (2/3 - tb) * 6 : p);
+          const L = (mx + mn) * 0.5;
+          if (dh) {
+            /* the expensive branch — only when the hue itself shifts */
+            let S = L > 0.5 ? dd / (2 - mx - mn) : dd / (mx + mn);
+            H += dh * 0.5; H = ((H % 360) + 360) % 360;
+            S = S * (1 + ds / 100); S = S < 0 ? 0 : S > 1 ? 1 : S;
+            const L2 = L + dl / 200;
+            const q = L2 < 0.5 ? L2 * (1 + S) : L2 + S - L2 * S;
+            const p = 2 * L2 - q;
+            let tr = H / 360 + 1 / 3, tg = H / 360, tb = H / 360 - 1 / 3;
+            if (tr < 0) tr += 1; if (tr > 1) tr -= 1;
+            if (tg < 0) tg += 1; if (tg > 1) tg -= 1;
+            if (tb < 0) tb += 1; if (tb > 1) tb -= 1;
+            r = 255 * (tr < 1/6 ? p + (q - p) * 6 * tr : tr < 1/2 ? q : tr < 2/3 ? p + (q - p) * (2/3 - tr) * 6 : p);
+            g = 255 * (tg < 1/6 ? p + (q - p) * 6 * tg : tg < 1/2 ? q : tg < 2/3 ? p + (q - p) * (2/3 - tg) * 6 : p);
+            b = 255 * (tb < 1/6 ? p + (q - p) * 6 * tb : tb < 1/2 ? q : tb < 2/3 ? p + (q - p) * (2/3 - tb) * 6 : p);
+          } else {
+            /* saturation / luminance only: linear, no HSL round trip */
+            const l255 = L * 255;
+            const k = 1 + ds / 100;
+            const base = l255 + dl * 1.275;
+            r = (r - l255) * k + base;
+            g = (g - l255) * k + base;
+            b = (b - l255) * k + base;
+          }
         }
       }
     }
 
     if (vig) {
-      const px = (i / 4) % w, py = Math.floor((i / 4) / w);
-      const dist = Math.hypot(px - cx, py - cy) / maxd;
-      const f = 1 - vig * dist * dist;
+      const f = 1 - vinv * (vx[px] + vy[py]);
       r *= f; g *= f; b *= f;
     }
     if (th > 0) {
@@ -1143,44 +1187,44 @@ function pixelOps(ctx, w, h, a, curve, hsl) {
     d[i]   = r < 0 ? 0 : r > 255 ? 255 : r;
     d[i+1] = g < 0 ? 0 : g > 255 ? 255 : g;
     d[i+2] = b < 0 ? 0 : b > 255 ? 255 : b;
+
+    if (++px === w) { px = 0; py++; }
   }
   ctx.putImageData(img, 0, 0);
-  if (a.sharpen > 0) sharpen(ctx, w, h, a.sharpen / 100);
+  if (a.sharpen > 0 && !skipSharpen) sharpenInPlace(ctx, img, w, h, a.sharpen / 100);
 }
 
-function sharpen(ctx, w, h, amount) {
-  const src = ctx.getImageData(0, 0, w, h);
-  const s = src.data;
-  const out = ctx.createImageData(w, h);
-  const o = out.data;
-  const K = [0, -1, 0, -1, 5, -1, 0, -1, 0];
-  const a = Math.min(1, amount);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      for (let c = 0; c < 3; c++) {
-        let sum = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const yy = y + dy, xx = x + dx;
-            if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue;
-            sum += s[(yy * w + xx) * 4 + c] * K[(dy + 1) * 3 + (dx + 1)];
-          }
-        }
-        o[i + c] = s[i + c] * (1 - a) + sum * a;
-      }
-      o[i + 3] = s[i + 3];
+/* Unsharp mask built on the browser's own blur (native, GPU-assisted) instead
+   of a 3x3 convolution: 3 multiply-adds per pixel instead of 27. It reuses the
+   pixel buffer we are already holding, so no extra full-image read is needed. */
+function sharpenInPlace(ctx, img, w, h, amount) {
+  const bg = makeCanvas(w, h).getContext('2d');
+  bg.filter = 'blur(1.2px)';
+  bg.drawImage(ctx.canvas, 0, 0);
+  bg.filter = 'none';
+  const blurred = bg.getImageData(0, 0, w, h).data;
+  const d = img.data;
+  const amt = Math.min(1, amount) * 1.6;
+  for (let i = 0; i < d.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      const v = d[i + c] + amt * (d[i + c] - blurred[i + c]);
+      d[i + c] = v < 0 ? 0 : v > 255 ? 255 : v;
     }
   }
-  ctx.putImageData(out, 0, 0);
+  ctx.putImageData(img, 0, 0);
+}
+
+/* kept for any caller that only has a context */
+function sharpen(ctx, w, h, amount) {
+  sharpenInPlace(ctx, ctx.getImageData(0, 0, w, h), w, h, amount);
 }
 
 /* paint a source canvas into ctx at w×h with the adjustment set applied */
-function paint(ctx, src, w, h, a, curve, hsl) {
+function paint(ctx, src, w, h, a, curve, hsl, skipSharpen) {
   ctx.filter = filterString(a);
   ctx.drawImage(src, 0, 0, w, h);
   ctx.filter = 'none';
-  if (needsPixel(a, curve, hsl)) pixelOps(ctx, w, h, a, curve, hsl);
+  if (needsPixel(a, curve, hsl)) pixelOps(ctx, w, h, a, curve, hsl, skipSharpen);
 }
 
 /* ---------- watermark ---------- */
@@ -1344,11 +1388,16 @@ function render() {
   wrap.style.height = dispH + 'px';
 
   const cv = $('#view');
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // Preview backing store: enough for the display, never more. Capping the
+  // device pixel ratio here is what keeps phones smooth — a 3x screen was
+  // making us compute a 1200px-wide preview for a 400px-wide display.
+  const dpr = S.fastPreview ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
   let iw = Math.round(dispW * dpr), ih = Math.round(dispH * dpr);
-  // while a slider is being dragged we render a smaller preview so the heavier
-  // passes (HSL, curves, sharpen) stay responsive
-  const cap = S.fastPreview ? 900 : 2400;
+  // Interactive previews are deliberately modest: the pixel passes cost time
+  // proportional to pixel count, so 700px while dragging and 1600px at rest is
+  // the difference between a smooth drag and a frozen tab. The full-resolution
+  // image is still what gets exported.
+  const cap = S.fastPreview ? 700 : 1600;
   if (iw > cap) { const s = cap / iw; iw = Math.round(iw * s); ih = Math.round(ih * s); }
   cv.width = iw; cv.height = ih;
   cv.style.width = dispW + 'px'; cv.style.height = dispH + 'px';
@@ -1359,7 +1408,9 @@ function render() {
   const useAdj = S.compare ? defaultAdj() : a.adj;
   const useCurve = S.compare ? defaultCurve() : a.curve;
   const useHsl = S.compare ? defaultHsl() : a.hsl;
-  paint(ctx, useSrc, iw, ih, useAdj, useCurve, useHsl);
+  // sharpen is invisible at preview scale and is the most expensive pass, so
+  // skip it while a slider is moving
+  paint(ctx, useSrc, iw, ih, useAdj, useCurve, useHsl, S.fastPreview);
 
   positionCrop();
   updateStatus();
@@ -1492,7 +1543,10 @@ function addImageFromFile(f, done) {
     const img = new Image();
     img.onload = () => {
       let w = img.naturalWidth, h = img.naturalHeight;
-      const MAX = 4096;
+      // 3200px keeps ~10MP of working data per canvas. At 4096 a single image
+      // held ~67MB per canvas and replay needs several, which is what killed
+      // the tab on phones.
+      const MAX = 3200;
       const sc = Math.min(1, MAX / Math.max(w, h));
       w = Math.round(w * sc); h = Math.round(h * sc);
       const c = makeCanvas(w, h);
@@ -2430,59 +2484,144 @@ window.addEventListener('appinstalled', () => {
 $('#aboutVersion').textContent = APP_VERSION;
 $('#aboutBuild').textContent = APP_BUILD;
 
-let pendingVersion = null;
-function showUpdate(version) {
-  if (version && version === APP_VERSION) return;   // already current
-  pendingVersion = version || null;
-  $('#ubTitle').textContent = version ? ('Lumen Studio ' + version + ' is available') : 'An update is available';
-  $('#ubMsg').textContent = 'You are on ' + APP_VERSION + '. Reload to update.';
-  $('#updateBar').classList.remove('hidden');
-  const n = $('#aboutUpdateNote');
-  if (n) n.textContent = version
-    ? 'Version ' + version + ' is available — reload to update.'
-    : 'A newer version is available — reload to update.';
+/* Compare two versions without a library. Returns -1 lower, 0 equal, 1 higher.
+   A prerelease (1.2.0-beta.1) sorts below its release. */
+function cmpVersion(a, b) {
+  const pa = String(a).split('-')[0].split('.').map(Number);
+  const pb = String(b).split('-')[0].split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x < y ? -1 : 1;
+  }
+  const ra = String(a).indexOf('-') >= 0, rb = String(b).indexOf('-') >= 0;
+  if (ra !== rb) return ra ? -1 : 1;
+  return 0;
 }
-$('#ubLater').addEventListener('click', () => $('#updateBar').classList.add('hidden'));
-$('#ubReload').addEventListener('click', () => {
-  $('#ubReload').textContent = 'Updating…';
-  try {
-    navigator.serviceWorker.getRegistration().then(reg => {
-      if (reg && reg.waiting) reg.waiting.postMessage('skipWaiting');
-      setTimeout(() => location.reload(), 250);
-    }).catch(() => location.reload());
-  } catch (e) { location.reload(); }
-});
-$('#aboutCheck').addEventListener('click', async () => {
+const versionNewer = (a, b) => !!a && !!b && cmpVersion(a, b) > 0;
+
+/* Ask the active service worker which version it is running. A message channel
+   gives a real reply, and the timeout means the UI can never hang on it. */
+function askServiceWorker(timeout) {
+  return new Promise(resolve => {
+    const sw = navigator.serviceWorker && navigator.serviceWorker.controller;
+    if (!sw) { resolve(null); return; }
+    let settled = false;
+    const done = v => { if (!settled) { settled = true; resolve(v); } };
+    const timer = setTimeout(() => done(null), timeout || 3500);
+    try {
+      const ch = new MessageChannel();
+      ch.port1.onmessage = e => { clearTimeout(timer); done(e.data || null); };
+      sw.postMessage({ type: 'get-version' }, [ch.port2]);
+    } catch (e) { clearTimeout(timer); done(null); }
+  });
+}
+
+/* The banner reflects the current truth in BOTH directions. Previously it could
+   only switch on, so a stale worker kept re-showing it after every reload. */
+function setUpdateState(available) {
+  const bar = $('#updateBar');
   const note = $('#aboutUpdateNote');
+  if (versionNewer(available, APP_VERSION)) {
+    $('#ubTitle').textContent = 'Lumen Studio ' + available + ' is available';
+    $('#ubMsg').textContent = 'You are on ' + APP_VERSION + '. Reload to update.';
+    bar.classList.remove('hidden');
+    if (note) note.textContent = 'Version ' + available + ' is available — reload to update.';
+  } else {
+    bar.classList.add('hidden');
+    if (note) note.textContent = 'You are running the latest version (' + APP_VERSION + ').';
+  }
+}
+
+/* Actually apply an update: nudge a waiting worker, then reload for real. */
+async function applyUpdate() {
   try {
     const reg = await navigator.serviceWorker.getRegistration();
-    if (!reg) { note.textContent = 'Update checks need the app served over https, or installed.'; return; }
-    note.textContent = 'Checking…';
-    await reg.update();
-    setTimeout(() => {
-      if (!pendingVersion) note.textContent = 'You are running the latest version (' + APP_VERSION + ').';
-    }, 1500);
-  } catch (e) { note.textContent = 'Could not check for updates right now.'; }
+    if (reg) {
+      if (reg.waiting) reg.waiting.postMessage('skipWaiting');
+      await Promise.race([reg.update().catch(() => {}), new Promise(r => setTimeout(r, 800))]);
+    }
+  } catch (e) {}
+  location.reload();
+}
+
+function showUpdateDialog(kind, version) {
+  const dlg = $('#updateDialog'), actions = $('#udActions');
+  $('#udTitle').textContent = kind === 'update' ? 'Update available'
+                              : kind === 'current' ? 'You are up to date'
+                              : 'Update check unavailable';
+  $('#udBody').textContent = kind === 'update'
+    ? 'Lumen Studio ' + version + ' is ready to install. You are on ' + APP_VERSION + '.'
+    : kind === 'current'
+      ? 'Lumen Studio ' + APP_VERSION + ' (build ' + APP_BUILD + ') is the latest version.'
+      : 'Could not reach the update service. Check your connection and try again.';
+  actions.innerHTML = '';
+  if (kind === 'update') {
+    actions.appendChild(mkBtn('Later', () => dlg.classList.remove('show')));
+    actions.appendChild(mkBtn('Update now', () => { dlg.classList.remove('show'); applyUpdate(); }, 'primary'));
+  } else {
+    actions.appendChild(mkBtn('OK', () => dlg.classList.remove('show'), 'primary'));
+  }
+  dlg.classList.add('show');
+}
+
+$('#udClose').addEventListener('click', () => $('#updateDialog').classList.remove('show'));
+$('#updateDialog').addEventListener('click', e => {
+  if (e.target === $('#updateDialog')) $('#updateDialog').classList.remove('show');
+});
+
+$('#ubLater').addEventListener('click', () => $('#updateBar').classList.add('hidden'));
+$('#ubReload').addEventListener('click', () => {
+  const btn = $('#ubReload');
+  btn.disabled = true;
+  btn.textContent = 'Updating…';
+  applyUpdate();
+});
+
+$('#aboutCheck').addEventListener('click', async () => {
+  const note = $('#aboutUpdateNote'), btn = $('#aboutCheck');
+  btn.disabled = true;
+  note.textContent = 'Checking for updates…';
+  let found = null, reachable = false;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg) {
+      reachable = true;
+      try { await reg.update(); } catch (e) {}
+      const info = await askServiceWorker(4000);
+      if (info && info.version) found = info.version;
+    }
+  } catch (e) {}
+  btn.disabled = false;
+  if (versionNewer(found, APP_VERSION)) {
+    setUpdateState(found);
+    showUpdateDialog('update', found);
+  } else if (reachable) {
+    setUpdateState(null);
+    showUpdateDialog('current');
+  } else {
+    note.textContent = 'Could not reach the update service.';
+    showUpdateDialog('unknown');
+  }
 });
 
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   const hadController = !!navigator.serviceWorker.controller;
 
   navigator.serviceWorker.addEventListener('message', e => {
-    if (e.data && e.data.type === 'lumen-version') showUpdate(e.data.version);
+    if (e.data && e.data.type === 'lumen-version') setUpdateState(e.data.version);
   });
 
-  // a newer worker has taken over: offer the reload rather than yanking the
-  // page out from under an edit that is in progress
+  // a newer worker has taken over: ask it what it is running and reflect that
+  // (rather than reloading and throwing away an edit in progress)
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (hadController) showUpdate(pendingVersion);
+    if (!hadController) return;
+    askServiceWorker(3000).then(info => setUpdateState(info && info.version));
   });
 
-  // ask the active worker which version it is running (it may have taken over
-  // before this page attached its listener)
-  navigator.serviceWorker.ready.then(reg => {
-    if (reg.active) reg.active.postMessage('check-version');
-  }).catch(() => {});
+  navigator.serviceWorker.ready
+    .then(() => askServiceWorker(3000))
+    .then(info => { if (info && info.version) setUpdateState(info.version); })
+    .catch(() => {});
 
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').then(reg => reg.update()).catch(() => {});
@@ -2586,8 +2725,9 @@ function updateQualityUI() {
 $('#qRange').addEventListener('input', e => {
   S.exportQuality = parseFloat(e.target.value) / 100;
   $('#qVal').textContent = e.target.value + '%';
-  renderExportEstimate();
 });
+// only re-measure on release — measuring renders the FULL-resolution image
+$('#qRange').addEventListener('change', renderExportEstimate);
 
 let exportBlob = null;
 function buildExportCanvas() {
@@ -2596,14 +2736,25 @@ function buildExportCanvas() {
   paint(c.getContext('2d'), a.source, c.width, c.height, a.adj, a.curve, a.hsl);
   return c;
 }
+/* Measuring the file size means rendering at FULL resolution, which can take a
+   second on a big photo. Never do that inside a keystroke: yield to the browser
+   first so the UI can paint, and ignore results from a superseded request. */
+let estimateToken = 0;
 function renderExportEstimate() {
   const a = A(); if (!a) return;
-  const c = buildExportCanvas();
-  const type = S.exportFormat;
-  c.toBlob(b => {
-    exportBlob = b;
-    $('#expSize').textContent = b ? fmtBytes(b.size) : '—';
-  }, type, type === 'image/png' ? undefined : S.exportQuality);
+  const token = ++estimateToken;
+  $('#expSize').textContent = 'Calculating…';
+  setTimeout(() => {
+    if (token !== estimateToken) return;
+    let c;
+    try { c = buildExportCanvas(); } catch (e) { $('#expSize').textContent = '—'; return; }
+    const type = S.exportFormat;
+    c.toBlob(b => {
+      if (token !== estimateToken) return;
+      exportBlob = b;
+      $('#expSize').textContent = b ? fmtBytes(b.size) : '—';
+    }, type, type === 'image/png' ? undefined : S.exportQuality);
+  }, 60);
 }
 function fmtBytes(n) {
   if (n < 1024) return n + ' B';
@@ -2612,6 +2763,17 @@ function fmtBytes(n) {
 }
 $('#expGo').addEventListener('click', () => {
   const a = A(); if (!a) return;
+  const btn = $('#expGo');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = 'Preparing…';
+  // a full-resolution render can take a second on a large photo: let the button
+  // state paint first so the app never looks frozen
+  setTimeout(() => doExport(btn, label), 60);
+});
+function doExport(btn, label) {
+  const a = A(); if (!a) return;
   const c = buildExportCanvas();
   const ext = { 'image/png':'png', 'image/jpeg':'jpg', 'image/webp':'webp', 'image/avif':'avif' }[S.exportFormat] || 'png';
   // strip anything that could escape the download folder or break the file name
@@ -2619,6 +2781,7 @@ $('#expGo').addEventListener('click', () => {
   const name = safe + '.' + ext;
   const type = S.exportFormat;
   c.toBlob(b => {
+    btn.disabled = false; btn.textContent = label;
     if (!b) { toast('Export failed — try a different format'); return; }
     const url = URL.createObjectURL(b);
     const link = document.createElement('a');
@@ -2628,7 +2791,7 @@ $('#expGo').addEventListener('click', () => {
     closeExport();
     toast('Downloaded ' + name);
   }, type, type === 'image/png' ? undefined : S.exportQuality);
-});
+}
 
 /* ---------- toast ---------- */
 let toastTimer = null;
