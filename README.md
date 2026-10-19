@@ -23,6 +23,18 @@ It is also an installable **Progressive Web App**: open the site, tap **Install*
 
 Plus: multi-image filmstrip, full undo/redo, hold-to-Compare against the original, one-click **Revert to original**, fit / 1:1 / zoom controls, and export to **PNG, JPG, WEBP or AVIF** with quality control.
 
+The top bar keeps **Add** and **Remove** next to Export, so managing images never means hunting through menus.
+
+## Your library
+
+**Help → nothing to hunt for: tap the logo.** The logo in the top bar opens your library — every image you
+export is filed there automatically, with the edit state intact, so you can reopen it later and keep working
+on it non-destructively rather than starting from a flattened copy. It is stored in the browser's IndexedDB:
+local, offline, and never uploaded.
+
+Saving also **starts a fresh edit** by default, so you can move straight on to the next image without
+losing anything — both behaviours are toggles in the export dialog.
+
 ## Interface
 
 The chrome is iOS-style glass: translucent bars that float over the canvas, with the frosted blur

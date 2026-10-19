@@ -16,6 +16,7 @@ const CORE = [
   './index.html',
   './version.json',
   './manifest.webmanifest',
+  './icons/logo-mark.png',
   './icons/icon-64.png',
   './icons/icon-192.png',
   './icons/icon-512.png',

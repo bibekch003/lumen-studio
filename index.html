@@ -115,12 +115,34 @@ button,input,select{font-family:inherit;color:inherit}
   display:flex;align-items:center;gap:12px;height:56px;flex:0 0 auto;
   margin:10px 10px 10px;padding:0 10px 0 14px;border-radius:var(--r);
 }
-.brand{display:flex;align-items:center;gap:10px;padding-right:14px;border-right:1px solid var(--stroke-soft)}
+.brand{
+  display:flex;align-items:center;gap:10px;padding:0 14px 0 0;cursor:pointer;
+  background:none;border:none;border-right:1px solid var(--stroke-soft);
+  font-family:inherit;color:inherit;border-radius:12px;transition:background .14s;
+}
+.brand:hover{background:rgba(255,255,255,.06)}
+.brand:active{transform:scale(.98)}
 .brand .mark{
-  width:30px;height:30px;border-radius:9px;flex:0 0 auto;
-  background-image:url('icons/icon-64.png'),linear-gradient(145deg,#2b3a55,#101218);
+  width:32px;height:32px;border-radius:10px;flex:0 0 auto;position:relative;overflow:hidden;
+  /* a 256px source, so a 32px box downsamples cleanly instead of from a 64px one */
+  background-image:url('icons/logo-mark.png');
   background-size:cover;background-position:center;
-  box-shadow:0 0 0 1px rgba(255,255,255,.14),0 2px 10px rgba(0,0,0,.4);
+  box-shadow:0 0 0 1px rgba(255,255,255,.16),0 2px 12px rgba(0,0,0,.45);
+  animation:markGlow 4.5s ease-in-out infinite;
+}
+.brand .mark::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(115deg,transparent 34%,rgba(255,255,255,.5) 50%,transparent 66%);
+  transform:translateX(-130%);
+  animation:markSheen 6s ease-in-out infinite;
+}
+@keyframes markGlow{
+  0%,100%{box-shadow:0 0 0 1px rgba(255,255,255,.16),0 2px 12px rgba(0,0,0,.45)}
+  50%{box-shadow:0 0 0 1px rgba(150,195,255,.55),0 2px 18px rgba(10,132,255,.45)}
+}
+@keyframes markSheen{
+  0%,70%{transform:translateX(-130%)}
+  88%,100%{transform:translateX(130%)}
 }
 .brand .name{font-weight:600;font-size:14px;letter-spacing:-.012em;white-space:nowrap}
 .brand .name span{color:var(--dim2);font-weight:400}
@@ -346,6 +368,7 @@ input[type=range]::-moz-range-thumb{
 }
 
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 
 .chip{
@@ -454,10 +477,12 @@ input[type=range]::-moz-range-thumb{
   position:fixed;inset:0;background:rgba(4,5,8,.72);backdrop-filter:blur(6px);
   -webkit-backdrop-filter:blur(6px);
   display:none;align-items:center;justify-content:center;z-index:100;padding:20px;
+  overflow-y:auto;
 }
 .overlay.show{display:flex}
 .modal{
   width:100%;max-width:440px;border-radius:24px;overflow:hidden;
+  max-height:calc(100dvh - 40px);display:flex;flex-direction:column;margin:auto;
   background:var(--glass-strong);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
   border:1px solid var(--stroke);box-shadow:0 40px 90px rgba(0,0,0,.65);
   animation:pop .2s cubic-bezier(.2,.9,.3,1);
@@ -467,7 +492,8 @@ input[type=range]::-moz-range-thumb{
 .modal-head h3{font-size:16px;font-weight:600;letter-spacing:-.015em}
 .modal-head .x{background:none;border:none;color:var(--dim);cursor:pointer;font-size:20px;line-height:1;padding:2px 7px;border-radius:8px}
 .modal-head .x:hover{background:rgba(255,255,255,.12);color:var(--text)}
-.modal-body{padding:20px}
+.modal-head,.modal-foot{flex:0 0 auto}
+.modal-body{padding:20px;overflow-y:auto;flex:1 1 auto;min-height:0;overscroll-behavior:contain}
 .modal-foot{padding:15px 20px;border-top:1px solid var(--stroke-soft);display:flex;gap:10px;justify-content:flex-end}
 .modal-foot .tbtn{height:42px;padding:0 20px;border-radius:13px}
 .meta-line{display:flex;justify-content:space-between;font-size:12.5px;padding:10px 0;border-bottom:1px solid var(--stroke-soft)}
@@ -507,7 +533,7 @@ input[type=range]::-moz-range-thumb{
 .about-card{display:flex;align-items:center;gap:13px}
 .about-logo{
   width:50px;height:50px;border-radius:14px;flex:0 0 auto;
-  background-image:url('icons/icon-64.png'),linear-gradient(145deg,#2b3a55,#101218);
+  background-image:url('icons/logo-mark.png');
   background-size:cover;background-position:center;
   box-shadow:0 0 0 1px var(--stroke),0 3px 14px rgba(0,0,0,.4);
 }
@@ -558,11 +584,43 @@ input[type=range]::-moz-range-thumb{
 
 .hidden{display:none !important}
 
+/* ---------- danger ---------- */
+.tbtn.danger{background:rgba(255,69,58,.16);border-color:rgba(255,69,58,.42);color:#ff8078}
+.tbtn.danger:hover:not(:disabled){background:var(--danger);color:#fff;border-color:transparent}
+
+/* ---------- dashboard (the local library) ---------- */
+#dashboard .modal{max-width:680px}
+#confirmDialog .modal{max-width:380px}
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px}
+.dash-card{
+  position:relative;border:1px solid var(--stroke-soft);border-radius:16px;overflow:hidden;
+  background:rgba(255,255,255,.05);cursor:pointer;transition:.16s;text-align:left;
+  font-family:inherit;color:inherit;
+}
+.dash-card:hover{border-color:var(--accent-soft);transform:translateY(-2px);box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.dash-thumb{display:block;aspect-ratio:1;background:#0e1013 center/cover no-repeat;border-bottom:1px solid var(--stroke-soft)}
+.dash-meta{padding:9px 10px 10px;display:flex;flex-direction:column;gap:3px}
+.dash-meta b{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-meta i{font-family:var(--mono);font-size:10px;color:var(--dim2);font-style:normal}
+.dash-del{
+  position:absolute;top:7px;right:7px;width:26px;height:26px;border-radius:9px;
+  background:rgba(10,11,14,.82);border:1px solid var(--stroke-soft);
+  color:var(--dim);cursor:pointer;font-size:15px;line-height:1;display:grid;place-items:center;
+  opacity:0;transition:.14s;
+}
+.dash-card:hover .dash-del,.dash-card:focus-within .dash-del{opacity:1}
+.dash-del:hover{background:var(--danger);color:#fff;border-color:transparent}
+.dash-empty{text-align:center;padding:46px 20px;color:var(--dim2)}
+.dash-empty svg{width:38px;height:38px;margin-bottom:14px;opacity:.7}
+.dash-empty b{display:block;font-size:14px;color:var(--dim);font-weight:600;margin-bottom:6px}
+.dash-empty p{font-size:12.5px;line-height:1.6;max-width:320px;margin:0 auto}
+.dash-count{font-family:var(--mono);font-size:11px;color:var(--dim2)}
+
 /* ==========================================================================
    Compact (phone / tablet) — decided from device signals in <head>, not just
    viewport width, so a spoofed desktop viewport cannot force the desktop UI.
    ========================================================================== */
-html[data-ui="compact"] .topbar{height:52px;margin:8px 8px 0;padding:0 8px 0 12px;border-radius:18px}
+html[data-ui="compact"] .topbar{height:52px;margin:8px 8px 0;padding:0 8px;border-radius:18px;gap:8px}
 html[data-ui="compact"] .body{flex-direction:column;gap:8px;padding:8px}
 html[data-ui="compact"] .stage{order:1;overscroll-behavior:contain}
 html[data-ui="compact"] .panel{
@@ -583,10 +641,21 @@ html[data-ui="compact"] .rail{
 html[data-ui="compact"] .rail::-webkit-scrollbar{display:none}
 html[data-ui="compact"] .rail-btn{flex:0 0 auto;margin:0;min-width:60px;padding:8px 4px;font-size:9.5px}
 html[data-ui="compact"] .doc-name{display:none}
-html[data-ui="compact"] .brand{padding-right:10px}
+html[data-ui="compact"] .brand{padding-right:0;border-right:none}
 html[data-ui="compact"] .brand .name{display:none}
+html[data-ui="compact"] .brand .mark{width:30px;height:30px;border-radius:9px}
+html[data-ui="compact"] .top-mid,html[data-ui="compact"] .top-right{gap:6px}
+html[data-ui="compact"] .tbtn{min-width:32px;padding:0 8px;height:34px;border-radius:10px}
+html[data-ui="compact"] .tbtn.primary{padding:0 12px}
 html[data-ui="compact"] .tbtn .lbl{display:none}
 html[data-ui="compact"] .tbtn.primary .lbl{display:inline}
+/* these live in the dashboard on a phone — keeping them here is what made the
+   bar overflow and the icons collide */
+html[data-ui="compact"] #btnInstall,
+html[data-ui="compact"] #btnRevert,
+html[data-ui="compact"] #btnHelp,
+html[data-ui="compact"] #btnPanelToggle,
+html[data-ui="compact"] .divider-v{display:none}
 html[data-ui="compact"] .panel-close{display:grid}
 html[data-ui="compact"] .filmstrip{height:62px;margin:0 8px 8px;padding:0 10px;gap:8px;border-radius:20px}
 html[data-ui="compact"] .thumb,html[data-ui="compact"] .fs-add{height:46px;width:46px;border-radius:11px}
@@ -595,9 +664,17 @@ html[data-ui="compact"] .zoombar{top:12px;right:12px;padding:4px}
 html[data-ui="compact"] .zoombar button{height:26px;min-width:26px;font-size:11.5px}
 html[data-ui="compact"] .stylebar{bottom:12px;padding:7px 9px;border-radius:18px;max-width:calc(100% - 20px)}
 html[data-ui="compact"] .pill{height:32px;font-size:12.5px;padding:0 13px 0 9px}
-html[data-ui="compact"] #toast{top:70px;bottom:auto;transform:translate(-50%,-14px)}
+/* below the zoom pill, which sits at the top of the stage on a phone */
+html[data-ui="compact"] #toast{top:120px;bottom:auto;transform:translate(-50%,-14px)}
 html[data-ui="compact"] #toast.show{transform:translate(-50%,0)}
 html[data-ui="compact"] #updateBar{top:68px;padding:10px 11px;gap:9px}
+html[data-ui="compact"] .overlay{padding:10px}
+html[data-ui="compact"] .modal{max-height:calc(100dvh - 20px);border-radius:22px}
+html[data-ui="compact"] .modal-body{padding:16px}
+html[data-ui="compact"] .modal-head{padding:15px 16px}
+html[data-ui="compact"] .modal-foot{padding:13px 16px}
+html[data-ui="compact"] .dash-grid{grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:10px}
+html[data-ui="compact"] .dash-del{opacity:1}
 html[data-ui="compact"] .hnd{width:22px;height:22px;border-radius:6px}
 html[data-ui="compact"] .hnd[data-h="nw"]{left:-11px;top:-11px}
 html[data-ui="compact"] .hnd[data-h="ne"]{right:-11px;top:-11px}
@@ -634,10 +711,10 @@ html[data-size="xs"] .panel{max-height:48vh}
 
   <!-- TOP BAR -->
   <header class="topbar glass">
-    <div class="brand">
-      <div class="mark"></div>
-      <div class="name">Lumen <span>Studio</span></div>
-    </div>
+    <button class="brand" id="btnDashboard" title="Your library">
+      <span class="mark"></span>
+      <span class="name">Lumen <span>Studio</span></span>
+    </button>
     <div class="top-mid">
       <button class="tbtn" id="btnUndo" title="Undo (Ctrl+Z)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 7"/></svg>
@@ -664,9 +741,13 @@ html[data-size="xs"] .panel{max-height:48vh}
       <button class="tbtn icon" id="btnHelp" title="Help &amp; shortcuts">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.4 2.4 0 1 1 3.2 2.2c-.7.3-1.1.9-1.1 1.6v.3"/><path d="M11.7 16.8h.01"/></svg>
       </button>
-      <button class="tbtn" id="btnOpen" title="Open images">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        <span class="lbl">Open</span>
+      <button class="tbtn" id="btnOpen" title="Add images">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        <span class="lbl">Add</span>
+      </button>
+      <button class="tbtn" id="btnDelete" title="Remove this image from the session">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M10 11v6M14 11v6"/></svg>
+        <span class="lbl">Remove</span>
       </button>
       <button class="tbtn primary" id="btnExport" title="Export (Ctrl+S)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
@@ -773,6 +854,16 @@ html[data-size="xs"] .panel{max-height:48vh}
         <input class="text-input" id="expName" placeholder="my-photo">
       </div>
       <div class="sec">
+        <div class="toggle-row">
+          <span>Save to your library</span>
+          <label class="switch"><input type="checkbox" id="expSaveLib" checked><span class="track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span>Start a new edit afterwards</span>
+          <label class="switch"><input type="checkbox" id="expNewAfter" checked><span class="track"></span></label>
+        </div>
+      </div>
+      <div class="sec">
         <div class="sec-label">Output</div>
         <div class="meta-line"><span>Dimensions</span><span id="expDims">—</span></div>
         <div class="meta-line"><span>Estimated size</span><span id="expSize">—</span></div>
@@ -867,6 +958,40 @@ html[data-size="xs"] .panel{max-height:48vh}
   </div>
   <button class="tbtn primary" id="ubReload">Reload</button>
   <button class="tbtn" id="ubLater">Later</button>
+</div>
+
+<!-- DASHBOARD / LIBRARY -->
+<div class="overlay" id="dashboard">
+  <div class="modal">
+    <div class="modal-head">
+      <div><h3 style="display:inline">Your library</h3> <span class="dash-count" id="dashCount"></span></div>
+      <button class="x" id="dashClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="dash-grid" id="dashGrid"></div>
+      <div class="dash-empty hidden" id="dashEmpty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-5 4 4 3-3 4 4"/></svg>
+        <b>Nothing saved yet</b>
+        <p>Export an image and it lands here automatically, ready to reopen and keep editing.</p>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="tbtn" id="dashHelp">Help &amp; shortcuts</button>
+      <button class="tbtn" id="dashAdd">Add images</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM -->
+<div class="overlay" id="confirmDialog">
+  <div class="modal">
+    <div class="modal-head"><h3 id="cfTitle">Are you sure?</h3></div>
+    <div class="modal-body"><p id="cfBody" class="ud-text"></p></div>
+    <div class="modal-foot">
+      <button class="tbtn" id="cfCancel">Cancel</button>
+      <button class="tbtn danger" id="cfOk">Remove</button>
+    </div>
+  </div>
 </div>
 
 <div id="toast"><span class="dot"></span><span id="toastMsg"></span></div>
@@ -1033,6 +1158,57 @@ async function idbDel(key) {
     const db = await idbOpen();
     await new Promise(res => { const tx = db.transaction(IDB_STORE, 'readwrite'); tx.objectStore(IDB_STORE).delete(key); tx.oncomplete = res; tx.onerror = res; tx.onabort = res; });
   } catch (e) {}
+}
+
+/* ============ library (the dashboard) ============
+   Entries share the same object store as the session, under a "lib:" prefix,
+   so no schema migration is needed. Each entry keeps the ORIGINAL image plus
+   the edit state, so reopening restores the full non-destructive stack rather
+   than a flattened copy. */
+const LIB_PREFIX = 'lib:';
+async function idbAll() {
+  try {
+    const db = await idbOpen();
+    return await new Promise((res, rej) => {
+      const out = [];
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const rq = tx.objectStore(IDB_STORE).openCursor();
+      rq.onsuccess = () => {
+        const c = rq.result;
+        if (!c) { res(out); return; }
+        if (String(c.key).indexOf(LIB_PREFIX) === 0) out.push(c.value);
+        c.continue();
+      };
+      rq.onerror = () => rej(rq.error);
+    });
+  } catch (e) { return []; }
+}
+
+function thumbFromCanvas(canvas, max) {
+  const w = canvas.width, h = canvas.height;
+  const sc = Math.min(1, max / Math.max(w, h));
+  const t = makeCanvas(Math.max(1, Math.round(w * sc)), Math.max(1, Math.round(h * sc)));
+  t.getContext('2d').drawImage(canvas, 0, 0, t.width, t.height);
+  try { return t.toDataURL('image/jpeg', 0.72); } catch (e) { return ''; }
+}
+
+/* the exported canvas doubles as the library thumbnail, so we never render twice */
+async function saveToLibrary(a, name, canvas) {
+  try {
+    const c = canvas || buildExportCanvas();
+    const entry = {
+      id: 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      name: name || a.name || 'image',
+      savedAt: Date.now(),
+      w: a.source.width, h: a.source.height,
+      thumb: thumbFromCanvas(c, 320),
+      blob: a.blob || null,
+      ops: a.ops, index: a.index,
+      adj: a.adj, curve: a.curve, hsl: a.hsl
+    };
+    await idbPut(LIB_PREFIX + entry.id, entry);
+    return entry;
+  } catch (e) { return null; }
 }
 
 let saveTimer = null, restoring = false, lastSaveSig = '';
@@ -2133,12 +2309,15 @@ function buildAdjust(P, F) {
   const a = A();
   const s0 = sec();
   const g0 = document.createElement('div');
-  g0.className = 'grid2';
+  g0.className = 'grid3';
   g0.appendChild(chip('Auto enhance', false, autoEnhance));
   g0.appendChild(chip('Reset all', false, () => {
     a.adj = defaultAdj(); a.curve = defaultCurve(); a.hsl = defaultHsl();
     buildPanel(); render(); scheduleSave();
   }));
+  // Revert lives here too, so it stays reachable on phones where the top bar
+  // has no room for it
+  g0.appendChild(chip('Revert', false, revertToOriginal));
   s0.appendChild(g0);
   P.appendChild(s0);
 
@@ -2657,15 +2836,32 @@ $('#helpClose').addEventListener('click', () => $('#helpOverlay').classList.remo
 $('#helpOverlay').addEventListener('click', e => { if (e.target === $('#helpOverlay')) $('#helpOverlay').classList.remove('show'); });
 
 /* ---------- revert everything ---------- */
-$('#btnRevert').addEventListener('click', () => {
+async function revertToOriginal() {
   const a = A();
   if (!a) { toast('Nothing to revert'); return; }
   if (a.index < 0 && !adjChanged(a.adj)) { toast('Already at the original'); return; }
-  if (!confirm('Discard all edits and restore the original image?')) return;
+  const yes = await askConfirm('Revert to the original?',
+    'Every edit on "' + a.name + '" is discarded and the untouched original is restored. This cannot be undone.',
+    'Revert');
+  if (!yes) return;
   a.ops = []; a.index = -1;
   a.adj = defaultAdj(); a.curve = defaultCurve(); a.hsl = defaultHsl();
   replay(); buildPanel();
+  scheduleSave();
   toast('Reverted to original');
+}
+$('#btnRevert').addEventListener('click', revertToOriginal);
+
+/* remove the active image from the session (its edits go with it) */
+$('#btnDelete').addEventListener('click', async () => {
+  const a = A();
+  if (!a) { toast('No image to remove'); return; }
+  const yes = await askConfirm('Remove this image?',
+    '"' + a.name + '" is taken out of this session along with its edits. Your original file is untouched.',
+    'Remove');
+  if (!yes) return;
+  removeImage(S.activeIdx);
+  toast('Removed from the session');
 });
 
 $('#btnUndo').addEventListener('click', undo);
@@ -2803,7 +2999,9 @@ function doExport(btn, label) {
   const safe = ($('#expName').value.trim() || 'image').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').slice(0, 120) || 'image';
   const name = safe + '.' + ext;
   const type = S.exportFormat;
-  c.toBlob(b => {
+  const saveLib = $('#expSaveLib').checked;
+  const newAfter = $('#expNewAfter').checked;
+  c.toBlob(async b => {
     btn.disabled = false; btn.textContent = label;
     if (!b) { toast('Export failed — try a different format'); return; }
     const url = URL.createObjectURL(b);
@@ -2812,7 +3010,23 @@ function doExport(btn, label) {
     document.body.appendChild(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
     closeExport();
-    toast('Downloaded ' + name);
+
+    // file it in the library first, so nothing is ever lost by starting fresh
+    let saved = false;
+    if (saveLib) saved = !!(await saveToLibrary(a, safe, c));
+
+    if (newAfter) {
+      S.images.length = 0;
+      S.activeIdx = -1;
+      S.zoom = 1;
+      $('#empty').classList.remove('hidden');
+      $('#canvasWrap').classList.add('hidden');
+      $('#zoombar').classList.add('hidden');
+      $('#docName').textContent = 'No image';
+      buildPanel(); refreshFilmstrip(); updateHistoryUI(); render(); scheduleSave();
+    }
+    toast(saved ? (newAfter ? 'Saved to your library — ready for a new image' : 'Saved to your library')
+                : (newAfter ? 'Downloaded ' + name + ' — ready for a new image' : 'Downloaded ' + name));
   }, type, type === 'image/png' ? undefined : S.exportQuality);
 }
 
@@ -2903,6 +3117,106 @@ function paintRange(input) {
   input.style.background = 'linear-gradient(90deg,#fff 0%,#fff ' + p +
     '%,rgba(255,255,255,.16) ' + p + '%,rgba(255,255,255,.16) 100%)';
 }
+
+/* ---------- confirm (replaces the native dialog) ---------- */
+let cfResolve = null;
+function askConfirm(title, body, okLabel) {
+  return new Promise(res => {
+    cfResolve = res;
+    $('#cfTitle').textContent = title;
+    $('#cfBody').textContent = body;
+    $('#cfOk').textContent = okLabel || 'Remove';
+    $('#confirmDialog').classList.add('show');
+  });
+}
+function closeConfirm(v) {
+  $('#confirmDialog').classList.remove('show');
+  const r = cfResolve; cfResolve = null;
+  if (r) r(v);
+}
+$('#cfOk').addEventListener('click', () => closeConfirm(true));
+$('#cfCancel').addEventListener('click', () => closeConfirm(false));
+$('#confirmDialog').addEventListener('click', e => { if (e.target === $('#confirmDialog')) closeConfirm(false); });
+
+/* ---------- dashboard ---------- */
+function fmtSaved(ts) {
+  const d = new Date(ts || Date.now());
+  return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' }) + ' · ' +
+         d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+async function renderDashboard() {
+  const grid = $('#dashGrid'), empty = $('#dashEmpty'), count = $('#dashCount');
+  if (!grid) return;
+  const items = (await idbAll()).sort((x, y) => (y.savedAt || 0) - (x.savedAt || 0));
+  grid.innerHTML = '';
+  count.textContent = items.length ? items.length + (items.length === 1 ? ' image' : ' images') : '';
+  empty.classList.toggle('hidden', items.length > 0);
+  for (const it of items) {
+    const card = document.createElement('div');
+    card.className = 'dash-card';
+    card.tabIndex = 0;
+    const th = document.createElement('div');
+    th.className = 'dash-thumb';
+    if (it.thumb) th.style.backgroundImage = 'url("' + it.thumb + '")';
+    const meta = document.createElement('div');
+    meta.className = 'dash-meta';
+    const b = document.createElement('b'); b.textContent = it.name || 'image';
+    const i = document.createElement('i');
+    i.textContent = fmtSaved(it.savedAt) + (it.w ? ' · ' + it.w + '\u00d7' + it.h : '');
+    meta.appendChild(b); meta.appendChild(i);
+    const del = document.createElement('button');
+    del.className = 'dash-del'; del.title = 'Remove from library'; del.textContent = '\u00d7';
+    del.addEventListener('click', ev => { ev.stopPropagation(); removeLibraryEntry(it.id, it.name); });
+    card.appendChild(th); card.appendChild(meta); card.appendChild(del);
+    card.addEventListener('click', () => openFromLibrary(it));
+    card.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openFromLibrary(it); } });
+    grid.appendChild(card);
+  }
+}
+
+function openDashboard() { $('#dashboard').classList.add('show'); renderDashboard(); }
+function closeDashboard() { $('#dashboard').classList.remove('show'); }
+
+async function openFromLibrary(entry) {
+  if (!entry || !entry.blob) { toast('That entry has no original image stored'); return; }
+  closeDashboard();
+  let f = entry.blob;
+  try { f = new File([entry.blob], entry.name || 'image', { type: entry.blob.type || 'image/png' }); } catch (e) {}
+  restoring = true;
+  await new Promise(res => {
+    addImageFromFile(f, obj => {
+      if (obj) {
+        obj.ops = entry.ops || [];
+        obj.index = typeof entry.index === 'number' ? entry.index : obj.ops.length - 1;
+        obj.adj = Object.assign(defaultAdj(), entry.adj || {});
+        obj.curve = entry.curve || defaultCurve();
+        obj.hsl = entry.hsl || defaultHsl();
+      }
+      res();
+    });
+  });
+  restoring = false;
+  if (S.images.length) setActive(S.images.length - 1);
+  scheduleSave();
+  toast('Opened ' + (entry.name || 'image'));
+}
+
+async function removeLibraryEntry(id, name) {
+  const yes = await askConfirm('Remove from your library?',
+    'The saved copy of "' + (name || 'image') + '" is deleted from this device. Any file you already downloaded is not affected.',
+    'Remove');
+  if (!yes) return;
+  await idbDel(LIB_PREFIX + id);
+  renderDashboard();
+  toast('Removed from library');
+}
+
+$('#btnDashboard').addEventListener('click', openDashboard);
+$('#dashClose').addEventListener('click', closeDashboard);
+$('#dashboard').addEventListener('click', e => { if (e.target === $('#dashboard')) closeDashboard(); });
+$('#dashAdd').addEventListener('click', () => { closeDashboard(); $('#fileInput').click(); });
+$('#dashHelp').addEventListener('click', () => { closeDashboard(); $('#helpOverlay').classList.add('show'); });
 
 /* ---------- toast ---------- */
 let toastTimer = null;
