@@ -23,6 +23,10 @@ It is also an installable **Progressive Web App**: open the site, tap **Install*
 
 Plus: multi-image filmstrip, full undo/redo, hold-to-Compare against the original, one-click **Revert to original**, fit / 1:1 / zoom controls, and export to **PNG, JPG, WEBP or AVIF** with quality control.
 
+**Export quality defaults to 100%** for JPG, WebP and AVIF, your last choice is remembered, and there is a
+one-click **Reset to 100%**. PNG is lossless, so it shows no quality control at all rather than a dead one.
+Quality 100% keeps the most detail the encoder can store — it cannot bring back detail that was never captured.
+
 Export adapts to the browser: formats it cannot encode are shown as unavailable rather than silently producing a file that lies about its contents. Because JPEG has no alpha channel, exporting a transparent image to JPEG composites it onto a **configurable background colour** (white by default) instead of black.
 
 The top bar keeps **Add** and **Remove** next to Export, so managing images never means hunting through menus.

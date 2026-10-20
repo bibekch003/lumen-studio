@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lumen Studio — Image Editor</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-vT8qHfx1L0YJbhzCCSdD7ULCJMtz3na0+xIV4uH64O8='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-s6S7YDbpuR0d9HF/EirjBk13NRpVdZjKZJhh917qnGI='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0c0d10">
@@ -996,10 +996,18 @@ html[data-size="xs"] .panel{max-height:48vh}
         </div>
       </div>
       <div class="sec" id="qualitySec">
-        <div class="ctrl">
-          <div class="ctrl-top"><span>Quality</span><span class="val" id="qVal">92%</span></div>
-          <input type="range" id="qRange" min="30" max="100" step="1" value="92">
+        <div class="ctrl" style="margin-bottom:10px">
+          <div class="ctrl-top"><span>Quality</span><span class="val" id="qVal">100%</span></div>
+          <input type="range" id="qRange" min="30" max="100" step="1" value="100">
         </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="tbtn" id="qReset" style="height:32px;font-size:12px">Reset to 100%</button>
+          <span class="hex" style="text-transform:none">100% keeps the most detail the encoder can store — it cannot restore detail that was never captured.</span>
+        </div>
+      </div>
+      <div class="sec hidden" id="losslessSec">
+        <div class="sec-label">Quality</div>
+        <div class="note"><b>PNG is lossless.</b> There is no quality setting — the file always keeps every pixel exactly.</div>
       </div>
       <div class="sec hidden" id="bgSec">
         <div class="sec-label">Background</div>
@@ -1024,6 +1032,7 @@ html[data-size="xs"] .panel{max-height:48vh}
       </div>
       <div class="sec">
         <div class="sec-label">Output</div>
+        <div class="meta-line"><span>Format</span><span id="expFmt">—</span></div>
         <div class="meta-line"><span>Dimensions</span><span id="expDims">—</span></div>
         <div class="meta-line"><span>Estimated size</span><span id="expSize">—</span></div>
       </div>
@@ -1548,7 +1557,7 @@ function pixelOps(ctx, w, h, a, curve, hsl, skipSharpen) {
   // Building the four curve LUTs and the hue table is the same work every
   // frame, so keep the last result and only rebuild when the shape changes.
   const useC = curveActive(curve);
-  let Lrgb, Lr, Lg, Lb;
+  let Lrgb, Lr, Lg, Lb, useR = false, useG = false, useB = false;
   if (useC) {
     const sig = JSON.stringify(curve);
     if (lutCache.curveSig !== sig) {
@@ -1557,6 +1566,9 @@ function pixelOps(ctx, w, h, a, curve, hsl, skipSharpen) {
       lutCache.g = curveLUT(curve.g); lutCache.b = curveLUT(curve.b);
     }
     Lrgb = lutCache.rgb; Lr = lutCache.r; Lg = lutCache.g; Lb = lutCache.b;
+    useR = !curveIsIdentity(curve.r);
+    useG = !curveIsIdentity(curve.g);
+    useB = !curveIsIdentity(curve.b);
   }
   const useH = hslActive(hsl);
   let hueTab = null;
@@ -1586,10 +1598,12 @@ function pixelOps(ctx, w, h, a, curve, hsl, skipSharpen) {
     if (fd) { const lift = fd * 34; r += lift; g += lift; b += lift; }
 
     if (useC) {
-      r = Lr[r < 0 ? 0 : r > 255 ? 255 : r | 0];
-      g = Lg[g < 0 ? 0 : g > 255 ? 255 : g | 0];
-      b = Lb[b < 0 ? 0 : b > 255 ? 255 : b | 0];
-      r = Lrgb[r]; g = Lrgb[g]; b = Lrgb[b];
+      if (useR) r = Lr[r < 0 ? 0 : r > 255 ? 255 : r | 0];
+      if (useG) g = Lg[g < 0 ? 0 : g > 255 ? 255 : g | 0];
+      if (useB) b = Lb[b < 0 ? 0 : b > 255 ? 255 : b | 0];
+      r = Lrgb[r < 0 ? 0 : r > 255 ? 255 : r | 0];
+      g = Lrgb[g < 0 ? 0 : g > 255 ? 255 : g | 0];
+      b = Lrgb[b < 0 ? 0 : b > 255 ? 255 : b | 0];
     }
 
     if (useH) {
@@ -1730,7 +1744,7 @@ const S = {
   ratio: null,
   lastFit: 1,
   exportFormat: 'image/png',
-  exportQuality: .92,
+  exportQuality: 1,
   watermark: { text:'', size:5, opacity:.7, color:'#ffffff', pos:'br', rotate:false }
 };
 const A = () => S.images[S.activeIdx] || null;
@@ -1800,11 +1814,58 @@ function applyOp(cv, op) {
   return cv;
 }
 
+/* ---- replay cache ----
+   Recomputing every op from the original on each undo is what made undo take
+   as long as the edit itself. Keep the canvas at each history index instead,
+   bounded by total bytes so a big session cannot exhaust memory. */
+const replayCache = new Map();
+let replayBytes = 0, uidSeq = 0;
+const REPLAY_CACHE_MAX = 150 * 1024 * 1024;
+function cacheKey(a, i) { if (!a._uid) a._uid = ++uidSeq; return a._uid + ':' + i; }
+function cachePut(a, i, cv) {
+  const k = cacheKey(a, i);
+  if (replayCache.has(k)) return;
+  replayCache.set(k, cv);
+  replayBytes += cv.width * cv.height * 4;
+}
+function cacheDropFrom(a, i) {
+  for (const k of [...replayCache.keys()]) {
+    if (k.indexOf(a._uid + ':') === 0 && Number(k.split(':')[1]) >= i) {
+      const cv = replayCache.get(k);
+      replayBytes -= cv.width * cv.height * 4;
+      replayCache.delete(k);
+    }
+  }
+}
+function cachePrune() {
+  while (replayBytes > REPLAY_CACHE_MAX && replayCache.size > 1) {
+    const k = replayCache.keys().next().value;
+    const cv = replayCache.get(k);
+    replayBytes -= cv.width * cv.height * 4;
+    replayCache.delete(k);
+  }
+}
+
 function replay() {
   const a = A();
   if (!a) return;
-  let c = cloneCanvas(a.original);
-  for (let i = 0; i <= a.index; i++) c = applyOp(c, a.ops[i]);
+  let c = replayCache.get(cacheKey(a, a.index));
+  if (!c) {
+    // start from the newest step we already have, not from the original — a new
+    // commit then costs one op instead of the whole history
+    let from = -1;
+    for (let i = a.index - 1; i >= -1; i--) {
+      const hit = replayCache.get(cacheKey(a, i));
+      if (hit) { c = hit; from = i; break; }
+    }
+    if (!c) { c = cloneCanvas(a.original); from = -1; cachePut(a, -1, c); }
+    for (let i = from + 1; i <= a.index; i++) {
+      c = applyOp(c, a.ops[i]);
+      cachePut(a, i, c);
+    }
+    cachePrune();
+    c = replayCache.get(cacheKey(a, a.index)) || c;
+  }
   a.source = c;
   render();
   refreshFilmstrip();
@@ -1815,6 +1876,8 @@ function replay() {
 function pushOp(op) {
   const a = A();
   if (!a) return;
+  // the branch we are about to overwrite is no longer reachable
+  cacheDropFrom(a, a.index + 1);
   a.ops = a.ops.slice(0, a.index + 1);
   a.ops.push(op);
   a.index = a.ops.length - 1;
@@ -3260,13 +3323,27 @@ $('#fmtGrid').addEventListener('click', e => {
   renderExportEstimate();
 });
 function updateQualityUI() {
-  $('#qualitySec').style.display = S.exportFormat === 'image/png' ? 'none' : 'block';
+  const lossless = S.exportFormat === 'image/png';
+  $('#qualitySec').style.display = lossless ? 'none' : 'block';
+  const ls = $('#losslessSec');
+  if (ls) ls.classList.toggle('hidden', !lossless);
   const bg = $('#bgSec');
   if (bg) bg.classList.toggle('hidden', S.exportFormat !== 'image/jpeg');
+  const fm = $('#expFmt');
+  if (fm) fm.textContent = (FORMAT_EXT[S.exportFormat] || 'png').toUpperCase();
 }
 $('#qRange').addEventListener('input', e => {
   S.exportQuality = parseFloat(e.target.value) / 100;
   $('#qVal').textContent = e.target.value + '%';
+  settings.quality2 = S.exportQuality; persistSettings();
+});
+$('#qReset').addEventListener('click', () => {
+  S.exportQuality = 1;
+  $('#qRange').value = 100;
+  $('#qVal').textContent = '100%';
+  paintRange($('#qRange'));
+  settings.quality2 = 1; persistSettings();
+  renderExportEstimate();
 });
 // only re-measure on release — measuring renders the FULL-resolution image
 $('#qRange').addEventListener('change', renderExportEstimate);
@@ -3594,7 +3671,7 @@ $('#dashSort').addEventListener('click', e => {
 /* ============ settings ============ */
 const SETTINGS_KEY = 'lumen-settings';
 const SETTINGS_DEFAULTS = { theme: 'system', plain: false, motion: false, quality: 'balanced',
-                            format: 'image/png', autosave: true, jpegBg: '#ffffff' };
+                            format: 'image/png', autosave: true, jpegBg: '#ffffff', quality2: 1 };
 let settings = Object.assign({}, SETTINGS_DEFAULTS);
 try { const raw = localStorage.getItem(SETTINGS_KEY); if (raw) settings = Object.assign({}, SETTINGS_DEFAULTS, JSON.parse(raw)); } catch (e) {}
 function persistSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {} }
@@ -3631,6 +3708,9 @@ function applySettings() {
   if (sa) sa.checked = !!settings.autosave;
   if (sf) sf.value = settings.format;
   const sb = $('#expBg'); if (sb) sb.value = settings.jpegBg || '#ffffff';
+  const qv = settings.quality2 === undefined ? 1 : settings.quality2;
+  const qr = $('#qRange');
+  if (qr) { qr.value = Math.round(qv * 100); $('#qVal').textContent = Math.round(qv * 100) + '%'; paintRange(qr); }
 }
 if (mqDark) {
   const onSys = () => { if (settings.theme === 'system') applySettings(); };
