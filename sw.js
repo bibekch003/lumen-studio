@@ -7,8 +7,8 @@
    Do not edit them by hand — and if you change the precache list below,
    run `npm run validate` so CI catches anything that does not exist.
    ------------------------------------------------------------------ */
-const VERSION = 'v1.5.1';
-const BUILD = 8;
+const VERSION = 'v1.6.0';
+const BUILD = 9;
 const CACHE = 'lumen-' + VERSION;
 
 const CORE = [
