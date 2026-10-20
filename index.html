@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lumen Studio — Image Editor</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-d5hMUFNr3Wg6ajD7CkbhmsZERtQlyn0LvN7o/0wQsH0='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-9xLbdGSh/CgmJxlRM5srt1P9ZNMYQxnGgzulhpEV8v4='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0c0d10">
@@ -1279,7 +1279,10 @@ function cloneCanvas(src) {
 function defaultAdj() {
   return { brightness:100, contrast:100, saturate:100, exposure:0, temperature:0,
            tint:0, hue:0, blur:0, grayscale:0, sepia:0, invert:0, fade:0,
-           vignette:0, sharpen:0, threshold:0, posterize:0 };
+           vignette:0, sharpen:0, threshold:0, posterize:0,
+           // tonal zones — separate controls so recovering shadows does not
+           // simply mean "brighter", and already-vivid colour is protected
+           highlights:0, shadows:0, whites:0, blacks:0, vibrance:0 };
 }
 function filterString(a) {
   const p = [];
@@ -1532,7 +1535,9 @@ async function restoreSession() {
 
 /* ---------- pixel passes ---------- */
 const needsPixel = (a, curve, hsl) => !!(a.exposure || a.temperature || a.tint || a.fade ||
-  a.vignette || a.threshold || a.sharpen || a.posterize) || curveActive(curve) || hslActive(hsl);
+  a.vignette || a.threshold || a.sharpen || a.posterize ||
+  a.highlights || a.shadows || a.whites || a.blacks || a.vibrance) ||
+  curveActive(curve) || hslActive(hsl);
 
 const lutCache = { curveSig: null, rgb: null, r: null, g: null, b: null, hueSig: null, hue: null };
 
@@ -1553,6 +1558,11 @@ function pixelOps(ctx, w, h, a, curve, hsl, skipSharpen) {
   // preset its flat cel-shaded look rather than just "very saturated".
   const post = a.posterize || 0;
   const pq = post > 1 ? 255 / (post - 1) : 255;
+  // tonal zones. All zero by default, and the whole block is skipped when they
+  // are, so a neutral image costs nothing.
+  const sh = a.shadows / 100, hi = a.highlights / 100;
+  const wh = a.whites / 100, bk = a.blacks / 100, vib = a.vibrance / 100;
+  const useTone = !!(sh || hi || wh || bk || vib);
 
   // Building the four curve LUTs and the hue table is the same work every
   // frame, so keep the last result and only rebuild when the shape changes.
@@ -1596,6 +1606,42 @@ function pixelOps(ctx, w, h, a, curve, hsl, skipSharpen) {
     if (tp) { r += tp * 46; b -= tp * 46; }
     if (tn) { g += tn * 40; r -= tn * 18; b -= tn * 18; }
     if (fd) { const lift = fd * 34; r += lift; g += lift; b += lift; }
+
+    if (useTone) {
+      let rn = r * (1 / 255), gn = g * (1 / 255), bn = b * (1 / 255);
+      if (sh || hi) {
+        // Shadows lift the toe but fade out AT black, so true black stays black
+        // instead of turning milky. Highlights move the shoulder and fade out at
+        // black, so recovery never crushes the shadows.
+        const wr = rn * 5 < 1 ? rn * 5 : 1, wg = gn * 5 < 1 ? gn * 5 : 1, wb = bn * 5 < 1 ? bn * 5 : 1;
+        rn += sh * 0.55 * (1 - rn) * (1 - rn) * wr + hi * 0.5 * rn * rn;
+        gn += sh * 0.55 * (1 - gn) * (1 - gn) * wg + hi * 0.5 * gn * gn;
+        bn += sh * 0.55 * (1 - bn) * (1 - bn) * wb + hi * 0.5 * bn * bn;
+      }
+      // Whites and Blacks move the END POINTS. Weighting by the cube keeps them
+      // off the opposite end of the range — scaling the whole ramp would just be
+      // a second Brightness control.
+      if (wh) {
+        rn += wh * 0.4 * rn * rn * rn;
+        gn += wh * 0.4 * gn * gn * gn;
+        bn += wh * 0.4 * bn * bn * bn;
+      }
+      if (bk) {
+        const cr = (1 - rn) * (1 - rn) * (1 - rn), cg = (1 - gn) * (1 - gn) * (1 - gn), cb = (1 - bn) * (1 - bn) * (1 - bn);
+        rn += bk * 0.4 * cr; gn += bk * 0.4 * cg; bn += bk * 0.4 * cb;
+      }
+      r = rn * 255; g = gn * 255; b = bn * 255;
+      if (vib) {
+        // vibrance weights by how dull a pixel already is, so a colourful sunset
+        // gains far less than flat grey — that is what separates it from Saturation
+        const mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+        const mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
+        const sat = (mx - mn) / 255;
+        const k = 1 + vib * 0.6 * (1 - sat);
+        const l = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = l + (r - l) * k; g = l + (g - l) * k; b = l + (b - l) * k;
+      }
+    }
 
     if (useC) {
       if (useR) r = Lr[r < 0 ? 0 : r > 255 ? 255 : r | 0];
@@ -2674,6 +2720,16 @@ function buildAdjust(P, F) {
   s.appendChild(slider('Exposure', () => a.adj.exposure, v => a.adj.exposure = v, -100, 100, 1, v => v, () => a.adj.exposure = 0));
   s.appendChild(slider('Fade', () => a.adj.fade, v => a.adj.fade = v, 0, 100, 1, v => v, () => a.adj.fade = 0));
   P.appendChild(s);
+
+  const st = sec();
+  st.appendChild(secLabel('Tone', 'double-click a label to reset it'));
+  st.appendChild(slider('Highlights', () => a.adj.highlights, v => a.adj.highlights = v, -100, 100, 1, v => v, () => a.adj.highlights = 0));
+  st.appendChild(slider('Shadows', () => a.adj.shadows, v => a.adj.shadows = v, -100, 100, 1, v => v, () => a.adj.shadows = 0));
+  st.appendChild(slider('Whites', () => a.adj.whites, v => a.adj.whites = v, -100, 100, 1, v => v, () => a.adj.whites = 0));
+  st.appendChild(slider('Blacks', () => a.adj.blacks, v => a.adj.blacks = v, -100, 100, 1, v => v, () => a.adj.blacks = 0));
+  st.appendChild(slider('Vibrance', () => a.adj.vibrance, v => a.adj.vibrance = v, -100, 100, 1, v => v, () => a.adj.vibrance = 0));
+  P.appendChild(st);
+
 
   const s2 = sec();
   s2.appendChild(secLabel('Color'));

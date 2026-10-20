@@ -13,7 +13,7 @@ It is also an installable **Progressive Web App**: open the site, tap **Install*
 | **Crop** | Draggable / resizable frame with rule-of-thirds guides, live pixel readout, aspect-ratio locks (Free, 1:1, 4:3, 3:2, 16:9, 9:16, 4:5) |
 | **Resize** | Width / height with aspect lock, plus quick 25–400% presets |
 | **Transform** | Rotate 90 deg left/right, flip horizontal/vertical, straighten slider (-45 to +45 deg) that auto-expands the canvas |
-| **Adjust** | Brightness, contrast, exposure, saturation, temperature, tint, hue, fade, sharpen, posterize, blur, vignette, grayscale, sepia, invert + one-click Auto enhance |
+| **Adjust** | **Tone** (Highlights, Shadows, Whites, Blacks), **Light** (Brightness, Contrast, Exposure, Fade), **Colour** (Saturation, Vibrance, Temperature, Tint, Hue), plus Sharpen, Posterize, Blur, Vignette, Grayscale, Sepia, Invert and one-click Auto enhance |
 | **Curves** | Interactive tone-curve editor — RGB composite plus separate R, G and B channels. Click to add a point, drag to shape it, double-click to remove. Monotone cubic interpolation, so the curve never overshoots |
 | **HSL** | Per-colour-range grading across 8 bands (reds, oranges, yellows, greens, aquas, blues, purples, magentas), each with hue, saturation and luminance |
 | **Filters** | 15 live-thumbnail presets (Anime, Vivid, Warm, Cool, Fade, Noir, Vintage, Cinematic, Punch, Matte, Film and more) |
@@ -67,6 +67,17 @@ adjustments exactly match that preset, so the bar always tells the truth about w
 
 Glass needs something behind it to blur, so the app sits on a soft radial gradient rather than flat black.
 The type stack prefers the real system font (SF Pro on iPhone and Mac) and falls back to Figtree elsewhere.
+
+## Colour controls
+
+The tonal controls are deliberately separated rather than folded into one brightness slider:
+
+- **Shadows** lift the dark end but fade out *at* black, so true black stays black instead of going milky.
+- **Highlights** move the shoulder and fade out at black, so recovering blown highlights never crushes the shadows.
+- **Whites** and **Blacks** move the end points of the range — weighting them by the cube keeps them off the opposite end, so they are not just a second Brightness control.
+- **Vibrance** weights its boost by how dull a pixel already is. Measured: a near-grey pixel gains ~50% saturation while an already-vivid one gains ~13%, which is what separates it from Saturation.
+
+Every control is **exactly neutral at 0**, every slider has its own reset (double-click its label), and each is verified to stay monotonic so the ramp never inverts.
 
 ## Non-destructive editing
 
