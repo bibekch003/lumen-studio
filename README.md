@@ -23,6 +23,8 @@ It is also an installable **Progressive Web App**: open the site, tap **Install*
 
 Plus: multi-image filmstrip, full undo/redo, hold-to-Compare against the original, one-click **Revert to original**, fit / 1:1 / zoom controls, and export to **PNG, JPG, WEBP or AVIF** with quality control.
 
+Export adapts to the browser: formats it cannot encode are shown as unavailable rather than silently producing a file that lies about its contents. Because JPEG has no alpha channel, exporting a transparent image to JPEG composites it onto a **configurable background colour** (white by default) instead of black.
+
 The top bar keeps **Add** and **Remove** next to Export, so managing images never means hunting through menus.
 
 ## Settings
@@ -104,11 +106,11 @@ If you edit the precache list in `sw.js`, run `npm run validate` so CI catches a
 
 - A strict **Content-Security-Policy** (`default-src 'none'`) blocks outbound connections, plugins, framing, base-URI hijacking and form exfiltration. There is no `connect-src` at all, so the page cannot phone home.
 - The only permissions granted beyond that are `manifest-src 'self'` and `worker-src 'self'`, which the PWA needs.
-- No third-party scripts and no analytics. The only external request is the Google Fonts stylesheet, and the app degrades to system fonts without it.
+- **No third-party requests at all.** The app loads its own files and nothing else — fonts come from the device (SF Pro on Apple hardware, Segoe UI / Roboto elsewhere). Verified: a full page load issues two same-origin requests and zero external ones.
 - File names are sanitised before use, thumbnails are built with the DOM API rather than `innerHTML`, and oversized uploads are rejected.
 - `Referrer-Policy: no-referrer`.
 
-*Note:* the inline script is allowed via `'unsafe-inline'` in `script-src`, which keeps the single file easy to edit by hand. If you want a hash-pinned policy instead, replace it with `script-src 'sha256-...'` — but you will then need to update the hash whenever the script changes.
+*Note:* `script-src` pins the inline scripts by **SHA-256 hash** rather than `'unsafe-inline'`. Editing the script therefore invalidates the hash — run `node scripts/lib/csp.mjs index.html` to refresh it, and `npm run validate` fails loudly if it is ever stale. The release script does this automatically. If a hash ever does go stale, the page shows a "could not start" panel instead of a blank screen.
 
 ## Versioning and releases
 

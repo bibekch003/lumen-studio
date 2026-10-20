@@ -88,6 +88,15 @@ for (const marker of ['Content-Security-Policy', "connect-src 'none'", 'manifest
 }
 note(`${html.includes("connect-src 'none'") ? 'ok  ' : 'FAIL'} CSP still blocks outbound connections`);
 
+/* 6. the CSP script hashes must match the inline scripts ------------------ */
+{
+  const { checkCsp } = await import('./lib/csp.mjs');
+  const csp = checkCsp(html);
+  if (!csp.ok) problems.push('CSP script hashes: ' + csp.reason);
+  note(`${csp.ok ? 'ok  ' : 'FAIL'} CSP script hashes       ${csp.ok ? csp.hashes.length + ' script(s) match' : csp.reason}`);
+  if (html.includes("script-src 'self' 'unsafe-inline'")) problems.push('CSP allows unsafe-inline scripts');
+}
+
 /* ------------------------------------------------------------------ result */
 console.log('');
 if (problems.length) {

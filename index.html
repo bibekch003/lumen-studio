@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lumen Studio — Image Editor</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; worker-src 'self'; manifest-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-ij7BrhJG7AR8PkL1qsPXyjwwWN1YCZEpLEXjFUID3Y8='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0c0d10">
@@ -45,7 +45,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lumen Studio">
-<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script>
 /* runs before the stylesheet paints: pick the theme from saved settings */
 (function () {
@@ -84,8 +83,8 @@
   --ok:#32d74b;
   --r:20px;
   --r-sm:12px;
-  --font:-apple-system,BlinkMacSystemFont,'SF Pro Text','Figtree','Helvetica Neue',sans-serif;
-  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --font:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  --mono:ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace;
   --blur:blur(30px) saturate(180%);
 
   /* surfaces — every one of these inverts in light mode */
@@ -471,6 +470,8 @@ input[type=range]::-moz-range-thumb{
 .chip:hover{background:var(--surface-2);color:var(--text)}
 .chip.on{background:var(--accent);color:#fff;border-color:transparent;font-weight:600;
   box-shadow:0 6px 16px rgba(10,132,255,.32)}
+.chip.unsupported{opacity:.34;cursor:not-allowed;text-decoration:line-through}
+.chip.unsupported:hover{background:var(--surface);color:var(--dim)}
 .chip.icon{flex-direction:column;gap:5px;height:62px;font-size:10.5px}
 .chip.icon svg{width:19px;height:19px}
 
@@ -676,6 +677,16 @@ input[type=range]::-moz-range-thumb{
 
 .hidden{display:none !important}
 
+/* ---------- boot fallback ---------- */
+#boot{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px;
+  background:var(--bg);text-align:center}
+.boot-card{max-width:390px;display:flex;flex-direction:column;align-items:center;gap:13px}
+.boot-card img{width:52px;height:52px;border-radius:24%;box-shadow:0 0 0 1px var(--stroke)}
+.boot-card b{font-size:16px;font-weight:600}
+.boot-card p{font-size:13px;color:var(--dim);line-height:1.65}
+.boot-card a{display:inline-flex;align-items:center;height:40px;padding:0 20px;border-radius:13px;
+  background:var(--accent);color:#fff;font-size:14px;font-weight:600;text-decoration:none}
+
 /* ---------- danger ---------- */
 .tbtn.danger{background:rgba(255,69,58,.16);border-color:rgba(255,69,58,.42);color:#ff8078}
 .tbtn.danger:hover:not(:disabled){background:var(--danger);color:#fff;border-color:transparent}
@@ -832,6 +843,19 @@ html[data-size="xs"] .panel{max-height:48vh}
 </style>
 </head>
 <body>
+
+<!-- If the app's script never runs — a stale CSP hash, an over-eager extension,
+     an unsupported browser — this stays on screen instead of a blank page. The
+     script removes it as its very first statement. -->
+<div id="boot">
+  <div class="boot-card">
+    <img src="icons/icon-64.png" alt="" width="52" height="52">
+    <b>Lumen Studio could not start</b>
+    <p>Something stopped the app's script from running. Reload the page, and if it keeps
+       happening, clear this site's data in your browser settings.</p>
+    <a href=".">Reload</a>
+  </div>
+</div>
 <div class="app">
 
   <!-- TOP BAR -->
@@ -975,6 +999,13 @@ html[data-size="xs"] .panel{max-height:48vh}
         <div class="ctrl">
           <div class="ctrl-top"><span>Quality</span><span class="val" id="qVal">92%</span></div>
           <input type="range" id="qRange" min="30" max="100" step="1" value="92">
+        </div>
+      </div>
+      <div class="sec hidden" id="bgSec">
+        <div class="sec-label">Background</div>
+        <div class="color-row">
+          <input type="color" id="expBg" value="#ffffff">
+          <span class="hex">JPEG has no transparency — this fills behind it</span>
         </div>
       </div>
       <div class="sec">
@@ -1205,6 +1236,9 @@ html[data-size="xs"] .panel{max-height:48vh}
 <div id="toast"><span class="dot"></span><span id="toastMsg"></span></div>
 
 <script>
+/* the app is alive — drop the fallback panel before anything else */
+(function () { var b = document.getElementById('boot'); if (b) b.remove(); })();
+
 /* =========================================================
    Lumen Studio — client-side image editor
    ========================================================= */
@@ -1341,6 +1375,14 @@ function idbOpen() {
     r.onerror = () => rej(r.error);
   });
 }
+/* Storage can fail for real reasons — private mode, a blocked origin, or a
+   full quota. Say so once instead of pretending the save worked. */
+let storageWarned = false;
+function storageWarn(why) {
+  if (storageWarned) return;
+  storageWarned = true;
+  toast('Could not save to this browser\u2019s storage (' + why + '). Editing still works, but nothing is kept after a refresh.');
+}
 async function idbPut(key, val) {
   try {
     const db = await idbOpen();
@@ -1349,7 +1391,11 @@ async function idbPut(key, val) {
       tx.objectStore(IDB_STORE).put(val, key);
       tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
     });
-  } catch (e) {}
+    return true;
+  } catch (e) {
+    storageWarn(e && e.name === 'QuotaExceededError' ? 'out of space' : (e && e.name) || 'unavailable');
+    return false;
+  }
 }
 async function idbGet(key) {
   try {
@@ -1389,7 +1435,7 @@ async function idbAll() {
       };
       rq.onerror = () => rej(rq.error);
     });
-  } catch (e) { return []; }
+  } catch (e) { storageWarn((e && e.name) || 'unavailable'); return []; }
 }
 
 function thumbFromCanvas(canvas, max) {
@@ -1414,9 +1460,10 @@ async function saveToLibrary(a, name, canvas) {
       ops: a.ops, index: a.index,
       adj: a.adj, curve: a.curve, hsl: a.hsl
     };
-    await idbPut(LIB_PREFIX + entry.id, entry);
+    const ok = await idbPut(LIB_PREFIX + entry.id, entry);
+    if (!ok) return null;
     return entry;
-  } catch (e) { return null; }
+  } catch (e) { storageWarn((e && e.name) || 'unavailable'); return null; }
 }
 
 let saveTimer = null, restoring = false, lastSaveSig = '';
@@ -2151,11 +2198,18 @@ function slider(label, get, set, min, max, step, fmt, dbl) {
   });
   return row;
 }
-function chip(text, on, fn, cls) {
+/* A chip is a clickable div, so it needs the affordances a real button gets
+   for free: a label for screen readers, a tooltip, and keyboard activation. */
+function chip(text, on, fn, cls, title) {
   const c = document.createElement('div');
   c.className = 'chip' + (cls ? ' ' + cls : '') + (on ? ' on' : '');
   c.innerHTML = text;
+  const label = title || String(text).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (label) { c.title = label; c.setAttribute('aria-label', label); }
+  c.setAttribute('role', 'button');
+  c.tabIndex = 0;
   c.addEventListener('click', fn);
+  c.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
   return c;
 }
 function buttonRow(items) {
@@ -2322,10 +2376,10 @@ function buildTransform(P, F) {
   s.appendChild(secLabel('Rotate & flip'));
   const g = document.createElement('div');
   g.className = 'grid4';
-  g.appendChild(chip('<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 7"/></svg>', false, () => { pushOp({type:'rotate90', dir:-1}); toast('Rotated left'); }, 'icon'));
-  g.appendChild(chip('<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-7.7L21 7"/></svg>', false, () => { pushOp({type:'rotate90', dir:1}); toast('Rotated right'); }, 'icon'));
-  g.appendChild(chip('<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v18"/><path d="M8 7l-4 5 4 5"/><path d="M16 7l4 5-4 5"/></svg>', false, () => { pushOp({type:'flip', axis:'h'}); toast('Flipped horizontal'); }, 'icon'));
-  g.appendChild(chip('<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 12h18"/><path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/></svg>', false, () => { pushOp({type:'flip', axis:'v'}); toast('Flipped vertical'); }, 'icon'));
+  g.appendChild(chip('<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 7"/></svg>', false, () => { pushOp({type:'rotate90', dir:-1}); toast('Rotated left'); }, 'icon', 'Rotate 90° left'));
+  g.appendChild(chip('<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-7.7L21 7"/></svg>', false, () => { pushOp({type:'rotate90', dir:1}); toast('Rotated right'); }, 'icon', 'Rotate 90° right'));
+  g.appendChild(chip('<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v18"/><path d="M8 7l-4 5 4 5"/><path d="M16 7l4 5-4 5"/></svg>', false, () => { pushOp({type:'flip', axis:'h'}); toast('Flipped horizontal'); }, 'icon', 'Flip horizontal'));
+  g.appendChild(chip('<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 12h18"/><path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/></svg>', false, () => { pushOp({type:'flip', axis:'v'}); toast('Flipped vertical'); }, 'icon', 'Flip vertical'));
   s.appendChild(g);
   P.appendChild(s);
 
@@ -3163,9 +3217,43 @@ $('#expClose').addEventListener('click', closeExport);
 $('#expCancel').addEventListener('click', closeExport);
 $('#exportOverlay').addEventListener('click', e => { if (e.target === $('#exportOverlay')) closeExport(); });
 
+/* Ask the browser which encoders it actually has. toBlob() falls back to PNG
+   for a format it cannot encode, which is how a file called .avif ended up
+   containing PNG data. */
+const FORMAT_SUPPORT = { 'image/png': true, 'image/jpeg': true, 'image/webp': true, 'image/avif': true };
+const FORMAT_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/avif': 'avif' };
+function probeFormats() {
+  return new Promise(resolve => {
+    const c = makeCanvas(2, 2);
+    const x = c.getContext('2d');
+    x.fillStyle = '#808080'; x.fillRect(0, 0, 2, 2);
+    const types = Object.keys(FORMAT_SUPPORT);
+    let left = types.length;
+    types.forEach(t => {
+      let done = false;
+      const finish = ok => { if (done) return; done = true; FORMAT_SUPPORT[t] = ok; if (--left === 0) resolve(); };
+      try { c.toBlob(b => finish(!!b && b.type === t), t, 0.9); } catch (e) { finish(false); }
+      setTimeout(() => finish(false), 1500);
+    });
+  });
+}
+function applyFormatSupport() {
+  document.querySelectorAll('#fmtGrid .chip').forEach(c => {
+    const ok = FORMAT_SUPPORT[c.dataset.fmt] !== false;
+    c.classList.toggle('unsupported', !ok);
+    c.setAttribute('aria-disabled', ok ? 'false' : 'true');
+    if (!ok) { c.title = c.textContent + ' is not supported by this browser'; c.removeAttribute('aria-label'); }
+  });
+  document.querySelectorAll('#setFormat option').forEach(o => { o.disabled = FORMAT_SUPPORT[o.value] === false; });
+  if (FORMAT_SUPPORT[S.exportFormat] === false) {
+    S.exportFormat = 'image/png';
+    document.querySelectorAll('#fmtGrid .chip').forEach(c => c.classList.toggle('on', c.dataset.fmt === S.exportFormat));
+  }
+}
 $('#fmtGrid').addEventListener('click', e => {
   const c = e.target.closest('.chip');
   if (!c) return;
+  if (FORMAT_SUPPORT[c.dataset.fmt] === false) { toast(c.textContent + ' is not supported by this browser'); return; }
   S.exportFormat = c.dataset.fmt;
   $('#fmtGrid').querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === c));
   updateQualityUI();
@@ -3173,6 +3261,8 @@ $('#fmtGrid').addEventListener('click', e => {
 });
 function updateQualityUI() {
   $('#qualitySec').style.display = S.exportFormat === 'image/png' ? 'none' : 'block';
+  const bg = $('#bgSec');
+  if (bg) bg.classList.toggle('hidden', S.exportFormat !== 'image/jpeg');
 }
 $('#qRange').addEventListener('input', e => {
   S.exportQuality = parseFloat(e.target.value) / 100;
@@ -3182,10 +3272,18 @@ $('#qRange').addEventListener('input', e => {
 $('#qRange').addEventListener('change', renderExportEstimate);
 
 let exportBlob = null;
+/* Formats without an alpha channel composite transparency onto whatever is
+   underneath — which for a fresh canvas is black. Fill the background first. */
+function exportBg() {
+  return S.exportFormat === 'image/jpeg' ? (settings.jpegBg || '#ffffff') : null;
+}
 function buildExportCanvas() {
   const a = A();
   const c = makeCanvas(a.source.width, a.source.height);
-  paint(c.getContext('2d'), a.source, c.width, c.height, a.adj, a.curve, a.hsl);
+  const ctx = c.getContext('2d');
+  const bg = exportBg();
+  if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, c.width, c.height); }
+  paint(ctx, a.source, c.width, c.height, a.adj, a.curve, a.hsl);
   return c;
 }
 /* Measuring the file size means rendering at FULL resolution, which can take a
@@ -3228,16 +3326,24 @@ $('#expGo').addEventListener('click', () => {
 function doExport(btn, label) {
   const a = A(); if (!a) return;
   const c = buildExportCanvas();
-  const ext = { 'image/png':'png', 'image/jpeg':'jpg', 'image/webp':'webp', 'image/avif':'avif' }[S.exportFormat] || 'png';
+  let ext = FORMAT_EXT[S.exportFormat] || 'png';
   // strip anything that could escape the download folder or break the file name
   const safe = ($('#expName').value.trim() || 'image').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').slice(0, 120) || 'image';
-  const name = safe + '.' + ext;
+  let name = safe + '.' + ext;
   const type = S.exportFormat;
   const saveLib = $('#expSaveLib').checked;
   const newAfter = $('#expNewAfter').checked;
   c.toBlob(async b => {
     btn.disabled = false; btn.textContent = label;
     if (!b) { toast('Export failed — try a different format'); return; }
+    // if the encoder handed back something other than what we asked for, name
+    // the file after what it actually is and say so in the final message
+    let swapped = false;
+    if (b.type && b.type !== type) {
+      ext = FORMAT_EXT[b.type] || 'png';
+      name = safe + '.' + ext;
+      swapped = true;
+    }
     const url = URL.createObjectURL(b);
     const link = document.createElement('a');
     link.href = url; link.download = name;
@@ -3248,6 +3354,7 @@ function doExport(btn, label) {
     // file it in the library first, so nothing is ever lost by starting fresh
     let saved = false;
     if (saveLib) saved = !!(await saveToLibrary(a, safe, c));
+    // storageWarn() has already explained the failure; the file itself is fine
 
     if (newAfter) {
       S.images.length = 0;
@@ -3259,8 +3366,12 @@ function doExport(btn, label) {
       $('#docName').textContent = 'No image';
       buildPanel(); refreshFilmstrip(); updateHistoryUI(); render(); scheduleSave();
     }
-    toast(saved ? (newAfter ? 'Saved to your library — ready for a new image' : 'Saved to your library')
-                : (newAfter ? 'Downloaded ' + name + ' — ready for a new image' : 'Downloaded ' + name));
+    const base = saved
+      ? (newAfter ? 'Saved to your library — ready for a new image' : 'Saved to your library')
+      : (newAfter ? 'Downloaded ' + name + ' — ready for a new image' : 'Downloaded ' + name);
+    toast(base + (swapped
+      ? ' (this browser cannot write ' + (type.split('/')[1] || '').toUpperCase() + ', so it saved as ' + ext.toUpperCase() + ')'
+      : ''));
   }, type, type === 'image/png' ? undefined : S.exportQuality);
 }
 
@@ -3482,8 +3593,8 @@ $('#dashSort').addEventListener('click', e => {
 
 /* ============ settings ============ */
 const SETTINGS_KEY = 'lumen-settings';
-const SETTINGS_DEFAULTS = { theme: 'system', plain: false, motion: false,
-                            quality: 'balanced', format: 'image/png', autosave: true };
+const SETTINGS_DEFAULTS = { theme: 'system', plain: false, motion: false, quality: 'balanced',
+                            format: 'image/png', autosave: true, jpegBg: '#ffffff' };
 let settings = Object.assign({}, SETTINGS_DEFAULTS);
 try { const raw = localStorage.getItem(SETTINGS_KEY); if (raw) settings = Object.assign({}, SETTINGS_DEFAULTS, JSON.parse(raw)); } catch (e) {}
 function persistSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {} }
@@ -3519,6 +3630,7 @@ function applySettings() {
   if (sm) sm.checked = !!settings.motion;
   if (sa) sa.checked = !!settings.autosave;
   if (sf) sf.value = settings.format;
+  const sb = $('#expBg'); if (sb) sb.value = settings.jpegBg || '#ffffff';
 }
 if (mqDark) {
   const onSys = () => { if (settings.theme === 'system') applySettings(); };
@@ -3551,6 +3663,7 @@ $('#setAutosave').addEventListener('change', e => {
   toast(settings.autosave ? 'Autosave on' : 'Autosave off');
 });
 $('#setFormat').addEventListener('change', e => { settings.format = e.target.value; persistSettings(); });
+$('#expBg').addEventListener('input', e => { settings.jpegBg = e.target.value; persistSettings(); });
 
 async function updateStorageStat() {
   const el = $('#setStorage'); if (!el) return;
@@ -3604,6 +3717,7 @@ function toast(msg) {
 window.addEventListener('resize', () => { if (A()) render(); });
 applySettings();
 buildPillBar();
+probeFormats().then(() => { applyFormatSupport(); updateQualityUI(); });
 buildPanel();
 updateHistoryUI();
 // bring back the previous session — autosave doubles as crash recovery

@@ -240,6 +240,16 @@ patchFile('package.json', '"version"\\s*:\\s*"[^"]+"', `"version": "${next}"`);
 patchFile('index.html', "const APP_VERSION = '[^']*';", `const APP_VERSION = '${next}';`);
 patchFile('index.html', 'const APP_BUILD = \\d+;', `const APP_BUILD = ${build};`);
 
+/* The CSP pins the inline scripts by SHA-256, and we just changed one of them.
+   Refresh the hashes now or the deployed app would refuse to run its own code. */
+{
+  const { applyCsp } = await import('./lib/csp.mjs');
+  const res = applyCsp(readFileSync(at('index.html'), 'utf8'));
+  if (res.error) fail('csp: ' + res.error);
+  writeFileSync(at('index.html'), res.html);
+  say(`\u00b7 ${'csp'.padEnd(11)} ${res.hashes.length} inline script hash(es) refreshed`);
+}
+
 /* sw.js — the cache name must change or clients keep the old files */
 patchFile('sw.js', "const VERSION = '[^']*';", `const VERSION = 'v${next}';`);
 patchFile('sw.js', 'const BUILD = \\d+;', `const BUILD = ${build};`);
