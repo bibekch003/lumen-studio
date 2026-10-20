@@ -13,11 +13,11 @@ It is also an installable **Progressive Web App**: open the site, tap **Install*
 | **Crop** | Draggable / resizable frame with rule-of-thirds guides, live pixel readout, aspect-ratio locks (Free, 1:1, 4:3, 3:2, 16:9, 9:16, 4:5) |
 | **Resize** | Width / height with aspect lock, plus quick 25–400% presets |
 | **Transform** | Rotate 90 deg left/right, flip horizontal/vertical, straighten slider (-45 to +45 deg) that auto-expands the canvas |
-| **Adjust** | **Tone** (Highlights, Shadows, Whites, Blacks), **Light** (Brightness, Contrast, Exposure, Fade), **Colour** (Saturation, Vibrance, Temperature, Tint, Hue), plus Sharpen, Posterize, Blur, Vignette, Grayscale, Sepia, Invert and one-click Auto enhance |
+| **Adjust** | **Tone** (Highlights, Shadows, Whites, Blacks), **Light** (Brightness, Contrast, Exposure, Fade), **Colour** (Saturation, Vibrance, Temperature, Tint, Hue), plus **Detail** (Sharpen with its own radius and threshold, and Denoise), Posterize, Blur, Vignette, Grayscale, Sepia, Invert and one-click Auto enhance |
 | **Curves** | Interactive tone-curve editor — RGB composite plus separate R, G and B channels. Click to add a point, drag to shape it, double-click to remove. Monotone cubic interpolation, so the curve never overshoots |
 | **HSL** | Per-colour-range grading across 8 bands (reds, oranges, yellows, greens, aquas, blues, purples, magentas), each with hue, saturation and luminance |
 | **Filters** | 15 live-thumbnail presets (Anime, Vivid, Warm, Cool, Fade, Noir, Vintage, Cinematic, Punch, Matte, Film and more) |
-| **Scan** | Document, B&W Text, Grayscale, Whiteboard, Color Scan and Receipt modes with a threshold slider for crisp text |
+| **Scan** | Document, B&W Text, Grayscale, Whiteboard, Color Scan and Receipt modes, with a threshold slider and an **adaptive** mode that compares each pixel with its local surroundings instead of one global level |
 | **Frame** | Solid border with thickness control and a colour picker |
 | **Watermark** | Text watermark with size, opacity, colour, 9-point position grid and a diagonal option |
 
@@ -78,6 +78,26 @@ The tonal controls are deliberately separated rather than folded into one bright
 - **Vibrance** weights its boost by how dull a pixel already is. Measured: a near-grey pixel gains ~50% saturation while an already-vivid one gains ~13%, which is what separates it from Saturation.
 
 Every control is **exactly neutral at 0**, every slider has its own reset (double-click its label), and each is verified to stay monotonic so the ramp never inverts.
+
+## Detail: sharpen and denoise
+
+Both are built on the browser's own blur, so they cost one native blur pass plus a single loop.
+
+**Sharpen works on luminance only** and applies the same delta to R, G and B. Sharpening each channel
+independently is what puts red/cyan fringes on high-contrast edges, because the channels disagree. Its
+**threshold** then leaves low-contrast areas alone: measured on a noisy field, sharpening alone doubled
+the noise (7.55 → 16.34) while sharpening with a threshold of 30 left it untouched at 7.55, so grain is
+not amplified along with real detail. Its **radius** sets the scale of the detail being lifted.
+
+**Denoise** blends each pixel toward its local average, but only as far as the local detail is small —
+flat areas where noise lives get smoothed, anything with real contrast is left alone. Measured: noise
+reduced 46% (7.55 → 4.08) while a hard edge kept **97.9%** of its contrast, so edges and fine texture
+survive instead of turning to plastic.
+
+**Adaptive scanning** is the difference between a usable and an unusable photo of a page. On a synthetic
+page lit from one side with text across it, a global threshold recovered the text with **55% error** —
+losing strokes entirely in the dark and bright ends — while the adaptive threshold recovered it with
+**0% error**.
 
 ## Non-destructive editing
 
