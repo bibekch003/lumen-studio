@@ -79,6 +79,20 @@ The tonal controls are deliberately separated rather than folded into one bright
 
 Every control is **exactly neutral at 0**, every slider has its own reset (double-click its label), and each is verified to stay monotonic so the ramp never inverts.
 
+## Performance notes
+
+- **Undo/redo is instant.** The canvas at each history index is cached (bounded at 150 MB), so stepping
+  back and forth is a pointer swap rather than a full recompute — measured 1522 ms → 1–3 ms at the
+  3200px maximum.
+- **Commits do not grow with history depth.** A new edit resumes from the nearest cached step, so it
+  costs one operation rather than replaying the whole stack — 1205 ms → 254 ms at depth 3.
+- **Exporting shows a "Rendering at full resolution" state** before it starts, so a long export never
+  looks like a dead tab.
+
+*Known limit:* a full-resolution commit still does its pixel work on the main thread and can block for
+roughly a quarter of a second on a large image. Moving the pipeline to a Web Worker with OffscreenCanvas
+is the fix; it needs testing on real hardware before it can be trusted.
+
 ## Detail: sharpen and denoise
 
 Both are built on the browser's own blur, so they cost one native blur pass plus a single loop.

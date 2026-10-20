@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lumen Studio — Image Editor</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-wneZUWhKUDBi6SSB8jLEjU0/5KblJyLugA6jYGO+80Q='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-mIsyiffru96HQf+Eloos7YSfXckeI5zw1R/jvheUl9w='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0c0d10">
@@ -677,6 +677,21 @@ input[type=range]::-moz-range-thumb{
 
 .hidden{display:none !important}
 
+/* ---------- long-job progress ---------- */
+#jobBar{
+  position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:60;
+  display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:16px;
+  width:min(420px,calc(100% - 28px));
+  background:var(--glass-strong);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--stroke);box-shadow:0 16px 44px rgba(0,0,0,.5);
+}
+.job-label{font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.job-track{flex:1;min-width:60px;height:5px;border-radius:3px;background:var(--surface-3);overflow:hidden}
+.job-fill{height:100%;width:0;border-radius:3px;background:var(--accent);transition:width .12s linear}
+#jobBar .tbtn{height:30px;font-size:12px;padding:0 11px;flex:0 0 auto}
+:root[data-motion="1"] .job-fill{transition:none}
+html[data-ui="compact"] #jobBar{top:12px;padding:8px 10px;gap:9px}
+
 /* ---------- boot fallback ---------- */
 #boot{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px;
   background:var(--bg);text-align:center}
@@ -1128,6 +1143,12 @@ html[data-size="xs"] .panel{max-height:48vh}
   <button class="tbtn" id="ubLater">Later</button>
 </div>
 
+<!-- LONG-JOB PROGRESS -->
+<div id="jobBar" class="hidden" role="status" aria-live="polite">
+  <span class="job-label" id="jobLabel">Working…</span>
+  <div class="job-track"><div class="job-fill" id="jobFill"></div></div>
+</div>
+
 <!-- DASHBOARD / LIBRARY -->
 <div class="overlay" id="dashboard">
   <div class="modal">
@@ -1549,9 +1570,15 @@ const lutCache = { curveSig: null, rgb: null, r: null, g: null, b: null, hueSig:
      biggest costs); distances come from precomputed row/column tables
    - HSL only pays for the full RGB -> HSL -> RGB round trip when the hue
      actually moves; saturation/luminance alone take a linear path          */
-function pixelOps(ctx, w, h, a, curve, hsl, skipSharpen) {
-  const img = ctx.getImageData(0, 0, w, h);
-  const d = img.data;
+/* ---------------------------------------------------------------------------
+   The pipeline is split in three so the same maths can run either as one
+   blocking call (small previews, where it is a few milliseconds) or in row
+   bands that yield to the browser (full-resolution commits, where a single
+   call would freeze the tab for over a second).
+     prepPixel  - everything that depends on the size and parameters
+     pixelBand  - the per-pixel loop over rows y0..y1
+   --------------------------------------------------------------------------- */
+function prepPixel(ctx, w, h, a, curve, hsl) {
   const ex = Math.pow(2, a.exposure / 100);
   const tp = a.temperature / 100, tn = a.tint / 100;
   const fd = a.fade / 100;
@@ -1616,9 +1643,17 @@ function pixelOps(ctx, w, h, a, curve, hsl, skipSharpen) {
   }
   // the threshold slider becomes a bias when adaptive: 128 is neutral
   const biasK = 1 + (128 - th) / 128 * 0.35;
+  return { ex, tp, tn, fd, th, post, pq, sh, hi, wh, bk, vib, useTone,
+           useC, useR, useG, useB, Lrgb, Lr, Lg, Lb, useH, hueTab,
+           vig, vinv, vx, vy, localMean, biasK };
+}
 
-  let px = 0, py = 0;
-  for (let i = 0; i < d.length; i += 4) {
+function pixelBand(d, w, h, P, y0, y1) {
+  const { ex, tp, tn, fd, th, post, pq, sh, hi, wh, bk, vib, useTone,
+          useC, useR, useG, useB, Lrgb, Lr, Lg, Lb, useH, hueTab,
+          vig, vinv, vx, vy, localMean, biasK } = P;
+  let px = 0, py = y0;
+  for (let i = y0 * w * 4, end = y1 * w * 4; i < end; i += 4) {
     let r = d[i], g = d[i+1], b = d[i+2];
     if (ex !== 1) { r *= ex; g *= ex; b *= ex; }
     if (tp) { r += tp * 46; b -= tp * 46; }
@@ -1737,7 +1772,27 @@ function pixelOps(ctx, w, h, a, curve, hsl, skipSharpen) {
 
     if (++px === w) { px = 0; py++; }
   }
+}
+
+/* Rows per band. Sized by PIXEL COUNT, not row count: a band that is fine at
+   1600 wide is three times the work at 4800. Measured, ~160k pixels keeps a
+   band around 20ms even on a slow machine. */
+/* Rows per band, sized by PIXEL COUNT rather than row count: a band that is
+   fine at 1600 wide is three times the work at 4800. */
+const BAND_PIXELS = 160000;
+function bandRows(w, h) {
+  return Math.max(2, Math.min(h, Math.ceil(BAND_PIXELS / Math.max(1, w))));
+}
+
+function pixelOps(ctx, w, h, a, curve, hsl, skipSharpen) {
+  const img = ctx.getImageData(0, 0, w, h);
+  const P = prepPixel(ctx, w, h, a, curve, hsl);
+  pixelBand(img.data, w, h, P, 0, h);
   ctx.putImageData(img, 0, 0);
+  finishDetail(ctx, img, w, h, a, skipSharpen);
+}
+
+function finishDetail(ctx, img, w, h, a, skipSharpen) {
   if (a.denoise > 0 && !skipSharpen) denoiseInPlace(ctx, img, w, h, a.denoise / 100);
   if (a.sharpen > 0 && !skipSharpen) {
     sharpenInPlace(ctx, img, w, h, a.sharpen / 100, a.sharpenRadius, a.sharpenThreshold);
@@ -1958,6 +2013,27 @@ function cachePrune() {
     replayBytes -= cv.width * cv.height * 4;
     replayCache.delete(k);
   }
+}
+
+/* ---- long-job runner: one job at a time, cancellable ---- */
+let jobToken = null;
+function beginJob(label) {
+  if (jobToken) jobToken.cancelled = true;        // a new job supersedes the old
+  const token = { cancelled: false };
+  jobToken = token;
+  const bar = $('#jobBar');
+  if (bar) {
+    $('#jobLabel').textContent = label || 'Working…';
+    $('#jobFill').style.width = '0%';
+    bar.classList.remove('hidden');
+  }
+  return token;
+}
+function endJob(token) {
+  if (jobToken !== token) return;
+  jobToken = null;
+  const bar = $('#jobBar');
+  if (bar) bar.classList.add('hidden');
 }
 
 function replay() {
@@ -3542,7 +3618,20 @@ $('#expGo').addEventListener('click', () => {
 });
 function doExport(btn, label) {
   const a = A(); if (!a) return;
-  const c = buildExportCanvas();
+  /* Rendering at full resolution blocks for a moment. Show the progress state
+     and yield a frame first, so the browser actually paints it — otherwise the
+     indicator would appear only after the work it is meant to describe. */
+  const token = beginJob('Rendering at full resolution');
+  requestAnimationFrame(() => setTimeout(() => doExportNow(btn, label, token), 0));
+}
+
+function doExportNow(btn, label, token) {
+  const a = A(); if (!a) { endJob(token); return; }
+  let c;
+  try { c = buildExportCanvas(); }
+  catch (e) { endJob(token); btn.disabled = false; btn.textContent = label;
+              toast('Export failed — ' + e.message); return; }
+  endJob(token);
   let ext = FORMAT_EXT[S.exportFormat] || 'png';
   // strip anything that could escape the download folder or break the file name
   const safe = ($('#expName').value.trim() || 'image').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').slice(0, 120) || 'image';
