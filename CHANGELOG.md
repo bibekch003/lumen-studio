@@ -2,6 +2,11 @@
 
 All notable changes to Lumen Studio. Generated automatically from commit messages — do not edit by hand.
 
+## v1.5.1 — 2026-10-20
+
+### Performance
+- cache replay so undo/redo is instant, skip identity curve channels, default export quality to 100% ([`ebb576d`](https://github.com/bibekch003/lumen-studio/commit/ebb576d))
+
 ## v1.5.0 — 2026-10-20
 
 ### Bug fixes
