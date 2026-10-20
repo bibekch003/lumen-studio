@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lumen Studio — Image Editor</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-gbXfeuTcVG2uEUMy3HvVszJcgGkKl/cmRh5iAhsIUKg='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-hAfsbcUJDp4ISbZ0LfXVIkSTbrjLWljWQnVqOWt62iE='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0c0d10">
@@ -677,6 +677,35 @@ input[type=range]::-moz-range-thumb{
 
 .hidden{display:none !important}
 
+/* ---------- magic edit ---------- */
+.tbtn.magic{border-color:transparent;color:#fff;
+  background:linear-gradient(135deg,var(--accent),#a24bff)}
+.tbtn.magic:hover{filter:brightness(1.1)}
+.magic-modal{max-width:640px}
+.magic-prompt{resize:vertical;min-height:58px;line-height:1.55;font-family:inherit}
+.magic-hint{font-size:12px;color:var(--dim);margin-top:8px;line-height:1.6}
+.magic-preview{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.magic-preview figure{margin:0;display:flex;flex-direction:column;gap:6px}
+.magic-preview canvas{width:100%;height:auto;border-radius:11px;border:1px solid var(--stroke);background:var(--surface-2)}
+.magic-preview figcaption{font-size:11px;color:var(--dim);text-align:center;letter-spacing:.02em;text-transform:uppercase}
+.magic-plan{display:flex;flex-direction:column;gap:8px}
+.magic-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:12px;
+  background:var(--surface-2);border:1px solid var(--stroke-soft)}
+.magic-row .mi-cb{width:17px;height:17px;flex:0 0 auto;accent-color:var(--accent)}
+.magic-row .mi-main{flex:1;min-width:0}
+.magic-row .mi-top{display:flex;align-items:baseline;gap:8px}
+.magic-row .mi-label{font-size:13px;font-weight:500}
+.magic-row .mi-group{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim)}
+.magic-row .mi-val{font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums;margin-left:auto}
+.magic-row .mi-why{font-size:11.5px;color:var(--dim);line-height:1.5;margin-top:2px}
+.magic-row input[type=range]{margin-top:7px}
+.magic-row.off{opacity:.42}
+.magic-empty{font-size:12.5px;color:var(--dim);padding:10px 0}
+.magic-ai .note{border-color:var(--stroke);background:var(--surface-2)}
+.modal-foot{padding:15px 20px;border-top:1px solid var(--stroke-soft);display:flex;gap:9px;align-items:center}
+html[data-ui="compact"] .magic-preview{grid-template-columns:1fr}
+html[data-ui="compact"] .modal-foot{flex-wrap:wrap}
+
 /* ---------- long-job progress ---------- */
 #jobBar{
   position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:60;
@@ -916,6 +945,10 @@ html[data-size="xs"] .panel{max-height:48vh}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M10 11v6M14 11v6"/></svg>
         <span class="lbl">Remove</span>
       </button>
+      <button class="tbtn magic" id="btnMagic" title="Magic Edit — describe the result you want">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="m13 3 1.9 5.1L20 10l-5.1 1.9L13 17l-1.9-5.1L6 10l5.1-1.9z"/></svg>
+        <span class="lbl">Magic Edit</span>
+      </button>
       <button class="tbtn primary" id="btnExport" title="Export (Ctrl+S)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
         <span class="lbl">Export</span>
@@ -1147,6 +1180,65 @@ html[data-size="xs"] .panel{max-height:48vh}
 <div id="jobBar" class="hidden" role="status" aria-live="polite">
   <span class="job-label" id="jobLabel">Working…</span>
   <div class="job-track"><div class="job-fill" id="jobFill"></div></div>
+</div>
+
+<!-- MAGIC EDIT -->
+<div class="overlay" id="magicOverlay">
+  <div class="modal magic-modal">
+    <div class="modal-head">
+      <h3>Magic Edit</h3>
+      <button class="x" id="magicClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="sec">
+        <div class="sec-label">Describe the result you want</div>
+        <textarea class="text-input magic-prompt" id="magicPrompt" rows="2"
+          placeholder="e.g. make this cinematic but keep the skin tones natural"></textarea>
+        <div class="magic-hint" id="magicRead">Reading the image…</div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-label">Goal</div>
+        <div class="grid4" id="magicGoals"></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-label">Keep unchanged <i>optional</i></div>
+        <input class="text-input" id="magicKeep" placeholder="e.g. skin tones, colours, background">
+      </div>
+
+      <div class="sec">
+        <div class="ctrl">
+          <div class="ctrl-top"><span>Strength</span><span class="val" id="magicStrengthVal">100%</span></div>
+          <input type="range" id="magicStrength" min="20" max="150" step="5" value="100">
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-label">Before &amp; after</div>
+        <div class="magic-preview">
+          <figure><canvas id="magicBefore"></canvas><figcaption>Before</figcaption></figure>
+          <figure><canvas id="magicAfter"></canvas><figcaption>After</figcaption></figure>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-label">Adjustments in this plan <i>untick to leave one out</i></div>
+        <div id="magicPlan" class="magic-plan"></div>
+      </div>
+
+      <div class="sec magic-ai">
+        <div class="sec-label">About the AI mode</div>
+        <div class="note" id="magicAiNote"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="tbtn" id="magicReset">Reset to original</button>
+      <div style="flex:1"></div>
+      <button class="tbtn" id="magicCancel">Cancel</button>
+      <button class="tbtn primary" id="magicApply">Apply</button>
+    </div>
+  </div>
 </div>
 
 <!-- DASHBOARD / LIBRARY -->
@@ -2330,7 +2422,7 @@ function refreshFilmstrip() {
     // built with the DOM API (no innerHTML) so file names can never inject markup
     const img = document.createElement('img');
     img.alt = im.name || 'image';
-    img.src = im.src;
+    if (im.src) img.src = im.src;   // never let a missing thumb request '/undefined'
     const rm = document.createElement('button');
     rm.className = 'rm';
     rm.title = 'Remove';
@@ -2966,6 +3058,531 @@ function autoEnhance() {
   buildPanel(); render();
   toast('Auto enhanced');
 }
+
+
+/* ===========================================================================
+   MAGIC EDIT — a local, rule-based planner.
+
+   It measures the image, then proposes ONLY the adjustments that image
+   actually needs for the goal you pick: a dark frame gets shadow recovery
+   rather than a blanket brightness lift, and a vivid sunset is left alone
+   rather than pushed further into saturation.
+
+   This is not an AI model and the interface says so plainly. A genuine AI
+   mode would need a secure backend; this app has none, so nothing is ever
+   uploaded.
+   =========================================================================== */
+
+/* ---- measure the image from a small proxy ---- */
+function magicAnalyze(src) {
+  const W = 240, H = Math.max(1, Math.round(240 * src.height / src.width));
+  const c = makeCanvas(W, H);
+  const x = c.getContext('2d');
+  x.drawImage(src, 0, 0, W, H);
+  const d = x.getImageData(0, 0, W, H).data;
+  const n = W * H;
+  const hist = new Uint32Array(256);
+  const lum = new Float32Array(n);
+  let sumL = 0, sumL2 = 0, sumS = 0, sumR = 0, sumG = 0, sumB = 0, skin = 0;
+  for (let p = 0; p < n; p++) {
+    const i = p * 4, r = d[i], g = d[i + 1], b = d[i + 2];
+    const l = 0.299 * r + 0.587 * g + 0.114 * b;
+    lum[p] = l;
+    sumL += l; sumL2 += l * l;
+    hist[l < 0 ? 0 : l > 255 ? 255 : l | 0]++;
+    const mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+    const mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    sumS += mx > 0 ? (mx - mn) / mx : 0;
+    sumR += r; sumG += g; sumB += b;
+    // a deliberately loose skin test — it only decides whether to be careful
+    if (r > 95 && g > 40 && b > 20 && r > g && g > b && (r - mn) > 15 && (r - g) > 10 && (r - g) < 90) skin++;
+  }
+  const mean = sumL / n;
+  const sd = Math.sqrt(Math.max(0, sumL2 / n - mean * mean));
+  const pct = (f) => { let acc = 0; const t = n * f;
+    for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc >= t) return i; } return 255; };
+  let edge = 0, edgeN = 0, flatVar = 0, flatN = 0;
+  for (let y = 1; y < H - 1; y++) {
+    for (let xx = 1; xx < W - 1; xx++) {
+      const p = y * W + xx;
+      const gr = Math.abs(lum[p + 1] - lum[p - 1]) + Math.abs(lum[p + W] - lum[p - W]);
+      edge += gr; edgeN++;
+      if (gr < 6) { flatVar += gr * gr; flatN++; }
+    }
+  }
+  return {
+    mean: mean / 255, contrast: sd / 255, sat: sumS / n,
+    cast: (sumR - sumB) / n / 255,
+    blackClip: hist[0] / n, whiteClip: hist[255] / n,
+    shadowClip: (hist[0] + hist[1] + hist[2] + hist[3]) / n,
+    highlightClip: (hist[252] + hist[253] + hist[254] + hist[255]) / n,
+    p5: pct(0.05), p95: pct(0.95), p50: pct(0.5),
+    range: (pct(0.95) - pct(0.05)) / 255,
+    skin: skin / n,
+    sharpness: edgeN ? edge / edgeN : 0,
+    noise: flatN ? Math.sqrt(flatVar / flatN) : 0
+  };
+}
+
+function magicDescribe(an) {
+  const b = [];
+  b.push(an.mean < 0.36 ? 'quite dark' : an.mean > 0.74 ? 'quite bright' : 'well exposed');
+  if (an.contrast < 0.13) b.push('flat contrast');
+  else if (an.contrast > 0.27) b.push('strong contrast');
+  if (an.highlightClip > 0.025) b.push('clipped highlights');
+  if (an.shadowClip > 0.05) b.push('crushed blacks');
+  if (an.sat < 0.17) b.push('dull colour');
+  else if (an.sat > 0.52) b.push('already very saturated');
+  if (Math.abs(an.cast) > 0.055) b.push(an.cast > 0 ? 'warm cast' : 'cool cast');
+  if (an.skin > 0.05) b.push('skin tones present');
+  if (an.noise > 3.2) b.push('visible noise');
+  if (an.sharpness < 5.5) b.push('a little soft');
+  return b.join(' · ');
+}
+
+/* a gentle S-curve, 0..100 */
+function magicSCurve(strength) {
+  const k = (strength / 100) * 0.15;
+  return [{ x: 0, y: 0 }, { x: 0.25, y: 0.25 - k }, { x: 0.75, y: 0.75 + k }, { x: 1, y: 1 }];
+}
+
+/* one proposed adjustment: a value, a reason, and how to write it */
+function mi(key, group, label, value, min, max, step, neutral, fmt, why, apply) {
+  return { key, group, label, value, min, max, step, neutral, fmt, why, apply, enabled: true };
+}
+const N0 = (v) => v, N100 = (v) => v + '%';
+const setA = (k) => (adj, c, h, v) => { adj[k] = v; };
+const setAoff = (k, base) => (adj, c, h, v) => { adj[k] = base + v; };
+
+/* ---- the goals. Each reads the analysis and proposes only what fits. ---- */
+const MAGIC_GOALS = [
+  {
+    id: 'natural', name: 'Natural', blurb: 'corrective, nothing you would notice',
+    build(an, f) {
+      const it = [];
+      if (an.mean < 0.44) it.push(mi('shadows', 'Tone', 'Shadows', clamp(Math.round((0.44 - an.mean) * 200), 8, 46),
+        -100, 100, 1, 0, N0, 'the frame is dark, so the shadows are lifted rather than the whole image',
+        setA('shadows')));
+      if (an.highlightClip > 0.012) it.push(mi('highlights', 'Tone', 'Highlights', -clamp(Math.round(an.highlightClip * 430), 6, 40),
+        -100, 100, 1, 0, N0, 'highlights are clipping and can be pulled back',
+        setA('highlights')));
+      if (an.contrast < 0.17) it.push(mi('contrast', 'Light', 'Contrast', clamp(Math.round((0.17 - an.contrast) * 250), 4, 18),
+        0, 60, 1, 0, (v) => '+' + v, 'the tonal range is narrow',
+        setAoff('contrast', 100)));
+      if (an.sat < 0.26) it.push(mi('vibrance', 'Colour', 'Vibrance', clamp(Math.round((0.26 - an.sat) * 130), 6, 26),
+        -100, 100, 1, 0, N0, 'the colour is muted; vibrance lifts it without over-saturating what is already vivid',
+        setA('vibrance')));
+      if (Math.abs(an.cast) > 0.05) it.push(mi('temperature', 'Colour', 'Temperature', clamp(Math.round(-an.cast * 150), -22, 22),
+        -100, 100, 1, 0, N0, an.cast > 0 ? 'the image is warm and is being pulled back toward neutral'
+                                          : 'the image is cool and is being warmed toward neutral',
+        setA('temperature')));
+      if (an.sharpness < 9) it.push(mi('sharpen', 'Detail', 'Sharpen', 16, 0, 100, 1, 0, N0,
+        'slightly soft; the threshold leaves flat areas alone so noise is not sharpened',
+        setA('sharpen')));
+      return it;
+    }
+  },
+  {
+    id: 'cinematic', name: 'Cinematic', blurb: 'filmic curve, cooler shadows, gentle vignette',
+    build(an, f) {
+      const it = [];
+      it.push(mi('curve', 'Tone', 'Film curve', 62, 0, 100, 1, 0, N0,
+        'a soft S-curve deepens the shadows and rolls the highlights off instead of clipping them',
+        (adj, c, hl, v) => { c.rgb = magicSCurve(v); }));
+      it.push(mi('fade', 'Tone', 'Fade', 11, 0, 100, 1, 0, N0,
+        'a touch of lift in the blacks gives the flat filmic look',
+        setA('fade')));
+      it.push(mi('temperature', 'Colour', 'Cool cast', -5, -100, 100, 1, 0, N0,
+        'shadows lean cool, which is what reads as cinematic',
+        setA('temperature')));
+      const desat = an.sat > 0.42 ? 12 : 6;
+      it.push(mi('vibrance', 'Colour', 'Pull colour back', -desat, -100, 100, 1, 0, N0,
+        an.sat > 0.42 ? 'the source is already very saturated, so it is pulled back'
+                      : 'a small desaturation is part of the filmic look',
+        setA('vibrance')));
+      it.push(mi('highlights', 'Tone', 'Roll off highlights', -14, -100, 100, 1, 0, N0,
+        'keeps the brightest areas from going pure white',
+        setA('highlights')));
+      if (!f.noVignette) it.push(mi('vignette', 'Detail', 'Vignette', 20, 0, 100, 1, 0, N0,
+        'a restrained vignette draws the eye to the centre',
+        setA('vignette')));
+      if (an.skin > 0.05 || f.protectSkin) {
+        it.push(mi('protect', 'Colour', 'Protect skin', 100, 100, 100, 1, 0, () => 'on',
+          'skin is present, so the colour changes are held back to keep it believable',
+          () => {}));
+      }
+      return it;
+    }
+  },
+  {
+    id: 'brighten', name: 'Brighten', blurb: 'lift a dark frame without washing it out',
+    build(an, f) {
+      const it = [];
+      const need = Math.max(0, 0.56 - an.mean);
+      it.push(mi('exposure', 'Light', 'Exposure', clamp(Math.round(need * 120), 6, 42),
+        -100, 100, 1, 0, N0, 'raises the midtones across the whole frame',
+        setA('exposure')));
+      it.push(mi('shadows', 'Tone', 'Shadows', clamp(Math.round(need * 150), 6, 40),
+        -100, 100, 1, 0, N0, 'recovers detail in the dark areas rather than just lifting everything',
+        setA('shadows')));
+      if (an.highlightClip > 0.02) it.push(mi('highlights', 'Tone', 'Highlights', -clamp(Math.round(an.highlightClip * 400), 6, 34),
+        -100, 100, 1, 0, N0, 'brightening would blow the highlights, so they are held back',
+        setA('highlights')));
+      if (an.sat < 0.24) it.push(mi('vibrance', 'Colour', 'Vibrance', 10, -100, 100, 1, 0, N0,
+        'a little colour comes back as the image brightens',
+        setA('vibrance')));
+      return it;
+    }
+  },
+  {
+    id: 'product', name: 'Product', blurb: 'neutral white balance, clean and crisp',
+    build(an, f) {
+      const it = [];
+      it.push(mi('temperature', 'Colour', 'Neutral white balance', clamp(Math.round(-an.cast * 165), -30, 30),
+        -100, 100, 1, 0, N0, 'product shots should not carry a colour cast',
+        setA('temperature')));
+      it.push(mi('whites', 'Tone', 'Whites', 16, -100, 100, 1, 0, N0,
+        'pushes the white point up so the background reads as clean',
+        setA('whites')));
+      it.push(mi('contrast', 'Light', 'Contrast', 8, 0, 60, 1, 0, (v) => '+' + v,
+        'separates the subject from the background',
+        setAoff('contrast', 100)));
+      it.push(mi('sharpen', 'Detail', 'Sharpen', 26, 0, 100, 1, 0, N0,
+        'product edges benefit from a firmer sharpen',
+        setA('sharpen')));
+      it.push(mi('sharpenThreshold', 'Detail', 'Sharpen threshold', 6, 0, 60, 1, 0, N0,
+        'keeps the sharpen off smooth surfaces',
+        setA('sharpenThreshold')));
+      if (an.noise > 3.0) it.push(mi('denoise', 'Detail', 'Denoise', 22, 0, 100, 1, 0, N0,
+        'there is visible noise; smoothing it keeps the product shot clean',
+        setA('denoise')));
+      return it;
+    }
+  },
+  {
+    id: 'portrait', name: 'Portrait', blurb: 'flattering, and careful with skin',
+    build(an, f) {
+      const it = [];
+      it.push(mi('highlights', 'Tone', 'Soften highlights', -10, -100, 100, 1, 0, N0,
+        'pulls the brightest skin down so it does not glare',
+        setA('highlights')));
+      it.push(mi('shadows', 'Tone', 'Open shadows', clamp(Math.round(Math.max(0, 0.42 - an.mean) * 170), 6, 32),
+        -100, 100, 1, 0, N0, 'opens up the eyes and the shadow side of the face',
+        setA('shadows')));
+      it.push(mi('temperature', 'Colour', 'Warmth', 4, -100, 100, 1, 0, N0,
+        'a small amount of warmth reads as healthy skin',
+        setA('temperature')));
+      it.push(mi('vibrance', 'Colour', 'Vibrance', 8, -100, 100, 1, 0, N0,
+        'vibrance rather than saturation, so skin does not go orange',
+        setA('vibrance')));
+      it.push(mi('sharpen', 'Detail', 'Sharpen', 10, 0, 100, 1, 0, N0,
+        'gentle, and only on real edges',
+        setA('sharpen')));
+      it.push(mi('sharpenThreshold', 'Detail', 'Sharpen threshold', 34, 0, 60, 1, 0, N0,
+        'a high threshold keeps the sharpen off skin texture',
+        setA('sharpenThreshold')));
+      if (an.noise > 2.6) it.push(mi('denoise', 'Detail', 'Denoise', 20, 0, 100, 1, 0, N0,
+        'light smoothing on the flatter areas',
+        setA('denoise')));
+      return it;
+    }
+  },
+  {
+    id: 'vintage', name: 'Vintage', blurb: 'faded, warm, low contrast',
+    build(an, f) {
+      return [
+        mi('fade', 'Tone', 'Fade', 20, 0, 100, 1, 0, N0, 'lifted blacks are the heart of the look', setA('fade')),
+        mi('temperature', 'Colour', 'Warmth', 9, -100, 100, 1, 0, N0, 'aged prints drift warm', setA('temperature')),
+        mi('sepia', 'Colour', 'Sepia', 14, 0, 100, 1, 0, N0, 'a little sepia unifies the palette', setA('sepia')),
+        mi('contrast', 'Light', 'Lower contrast', -10, -40, 40, 1, 0, (v) => (v > 0 ? '+' : '') + v,
+          'older lenses and film had a softer tonal range', setAoff('contrast', 100)),
+        mi('vibrance', 'Colour', 'Muted colour', -12, -100, 100, 1, 0, N0, 'the palette is pulled back', setA('vibrance')),
+        mi('vignette', 'Detail', 'Vignette', 24, 0, 100, 1, 0, N0, 'a soft falloff at the corners', setA('vignette'))
+      ];
+    }
+  },
+  {
+    id: 'restore', name: 'Restore', blurb: 'clean up an old or damaged scan',
+    build(an, f) {
+      const it = [];
+      it.push(mi('denoise', 'Detail', 'Denoise', clamp(Math.round(14 + an.noise * 6), 16, 46), 0, 100, 1, 0, N0,
+        an.noise > 3.2 ? 'the scan carries visible noise' : 'a light clean-up, kept conservative so detail survives',
+        setA('denoise')));
+      it.push(mi('shadows', 'Tone', 'Recover shadows', 26, -100, 100, 1, 0, N0,
+        'faded prints lose their shadow detail first', setA('shadows')));
+      if (an.highlightClip > 0.015) it.push(mi('highlights', 'Tone', 'Recover highlights', -18, -100, 100, 1, 0, N0,
+        'holds the bleached highlights', setA('highlights')));
+      it.push(mi('contrast', 'Light', 'Contrast', 14, 0, 60, 1, 0, (v) => '+' + v,
+        'restores the tonal range that faded away', setAoff('contrast', 100)));
+      it.push(mi('vibrance', 'Colour', 'Vibrance', 14, -100, 100, 1, 0, N0,
+        'brings back colour that has drifted', setA('vibrance')));
+      if (an.sharpness < 12) it.push(mi('sharpen', 'Detail', 'Sharpen', 18, 0, 100, 1, 0, N0,
+        'the scan is soft; the threshold avoids lifting the grain', setA('sharpen')));
+      it.push(mi('sharpenThreshold', 'Detail', 'Sharpen threshold', 14, 0, 60, 1, 0, N0,
+        'keeps the sharpen away from the noise', setA('sharpenThreshold')));
+      return it;
+    }
+  },
+  {
+    id: 'artistic', name: 'Artistic', blurb: 'bold and stylised',
+    build(an, f) {
+      const it = [
+        mi('curve', 'Tone', 'Punch curve', 88, 0, 100, 1, 0, N0, 'a strong S-curve for impact',
+          (adj, c, hl, v) => { c.rgb = magicSCurve(v); }),
+        mi('vibrance', 'Colour', 'Vibrance', 30, -100, 100, 1, 0, N0, 'colour is pushed, but weighted toward the duller pixels', setA('vibrance')),
+        mi('contrast', 'Light', 'Contrast', 16, 0, 60, 1, 0, (v) => '+' + v, 'adds bite', setAoff('contrast', 100)),
+        mi('vignette', 'Detail', 'Vignette', 18, 0, 100, 1, 0, N0, 'focuses attention', setA('vignette'))
+      ];
+      if (an.highlightClip < 0.02) it.push(mi('highlights', 'Tone', 'Highlights', 12, -100, 100, 1, 0, N0,
+        'there is headroom in the highlights to push', setA('highlights')));
+      return it;
+    }
+  }
+];
+
+/* ---- plain language -> goal + modifiers. Keyword rules, not a model. ---- */
+const MAGIC_WORDS = [
+  { goal: 'cinematic', words: ['cinematic', 'cinema', 'film look', 'filmic', 'movie', 'moody', 'teal and orange', 'dramatic film'] },
+  { goal: 'portrait', words: ['portrait', 'skin', 'face', 'headshot', 'person', 'selfie', 'model'] },
+  { goal: 'product', words: ['product', 'ecommerce', 'e-commerce', 'catalog', 'catalogue', 'listing', 'white background'] },
+  { goal: 'vintage', words: ['vintage', 'retro', 'old school', 'aged', 'nostalgic', '70s', '80s'] },
+  { goal: 'restore', words: ['restore', 'repair', 'damaged', 'faded', 'recover', 'old photo', 'scan clean'] },
+  { goal: 'artistic', words: ['artistic', 'stylised', 'stylized', 'bold', 'creative', 'abstract'] },
+  { goal: 'brighten', words: ['bright', 'brighter', 'lighter', 'lighten', 'dark photo', 'too dark', 'underexposed'] },
+  { goal: 'natural', words: ['natural', 'realistic', 'true to life', 'subtle', 'correct', 'clean up', 'normal'] }
+];
+
+function magicParsePrompt(text) {
+  const t = ' ' + String(text || '').toLowerCase() + ' ';
+  const f = { protectSkin: false, soft: false, strong: false, noVignette: false, matched: [] };
+  for (const rule of MAGIC_WORDS) {
+    for (const w of rule.words) {
+      if (t.indexOf(w) >= 0) { f.matched.push({ goal: rule.goal, word: w }); break; }
+    }
+  }
+  if (/keep .*skin|skin .*natural|natural skin|don'?t .*skin|preserve .*skin/.test(t)) f.protectSkin = true;
+  if (/subtle|gentle|slight|mild|barely|not too|don'?t over|less|soft/.test(t)) f.soft = true;
+  if (/strong|dramatic|bold|heavy|punchy|intense|more/.test(t)) f.strong = true;
+  if (/no vignette|without vignette|no dark corners/.test(t)) f.noVignette = true;
+  return f;
+}
+
+/* "keep unchanged" -> the keys we must not move */
+function magicProtect(text) {
+  const t = String(text || '').toLowerCase();
+  const skip = {};
+  if (/skin|face|portrait|complexion/.test(t)) { skip.vibrance = true; skip.saturate = true; }
+  if (/colou?r|saturat|tone|hue/.test(t)) { skip.vibrance = true; skip.saturate = true; skip.sepia = true; }
+  if (/bright|exposure|light|dark/.test(t)) { skip.exposure = true; skip.brightness = true; }
+  if (/background|backdrop/.test(t)) { skip.vignette = true; }
+  if (/sharp|detail/.test(t)) { skip.sharpen = true; skip.denoise = true; }
+  return skip;
+}
+
+/* ---- build the plan: which goal, then filter and tune it ---- */
+function magicBuildPlan(goalId, promptText, keepText, an) {
+  const f = magicParsePrompt(promptText);
+  if (f.protectSkin) f.protectSkin = true;
+  const goal = MAGIC_GOALS.find(g => g.id === goalId) || MAGIC_GOALS[0];
+  let items = goal.build(an, f);
+
+  const skip = magicProtect(keepText);
+  if (Object.keys(skip).length) items = items.filter(it => !skip[it.key]);
+
+  // a "subtle"/"gentle" prompt scales everything down; "bold" scales up
+  if (f.soft) items = items.map(it => Object.assign({}, it, {
+    value: it.neutral + (it.value - it.neutral) * 0.6
+  }));
+  if (f.strong) items = items.map(it => Object.assign({}, it, {
+    value: it.neutral + (it.value - it.neutral) * 1.25
+  }));
+
+  return { goal: goal.id, goalName: goal.name, flags: f, items, protect: skip };
+}
+
+/* ---- turn the (possibly edited) plan into real adjustment state ---- */
+function magicOutput(plan, strength) {
+  const adj = defaultAdj(), curve = defaultCurve(), hsl = defaultHsl();
+  for (const it of plan.items) {
+    if (!it.enabled) continue;
+    const v = it.neutral + (it.value - it.neutral) * strength;
+    it.apply(adj, curve, hsl, v);
+  }
+  return { adj, curve, hsl };
+}
+
+/* =========================== the interface =========================== */
+let magicState = null;
+
+function openMagic() {
+  const a = A();
+  if (!a) { toast('Load an image first'); return; }
+  const an = magicAnalyze(a.source);
+  magicState = {
+    an,
+    prompt: '', keep: '',
+    strength: 1,
+    plan: magicBuildPlan('natural', '', '', an)
+  };
+  $('#magicRead').textContent = 'This image looks ' + magicDescribe(an) + '.';
+  $('#magicPrompt').value = '';
+  $('#magicKeep').value = '';
+  $('#magicStrength').value = 100;
+  $('#magicStrengthVal').textContent = '100%';
+  buildMagicGoals();
+  renderMagicPlan();
+  $('#magicOverlay').classList.add('show');
+}
+
+function closeMagic() { $('#magicOverlay').classList.remove('show'); }
+
+function buildMagicGoals() {
+  const g = $('#magicGoals');
+  g.innerHTML = '';
+  MAGIC_GOALS.forEach(goal => {
+    const c = document.createElement('div');
+    c.className = 'chip' + (magicState.plan.goal === goal.id ? ' on' : '');
+    c.textContent = goal.name;
+    c.title = goal.blurb;
+    c.setAttribute('aria-label', goal.name + ' — ' + goal.blurb);
+    c.setAttribute('role', 'button');
+    c.tabIndex = 0;
+    c.addEventListener('click', () => {
+      magicState.plan = magicBuildPlan(goal.id, magicState.prompt, magicState.keep, magicState.an);
+      buildMagicGoals(); renderMagicPlan();
+    });
+    g.appendChild(c);
+  });
+}
+
+function renderMagicPlan() {
+  const plan = magicState.plan;
+  const host = $('#magicPlan');
+  host.innerHTML = '';
+  if (!plan.items.length) {
+    host.innerHTML = '<div class="magic-empty">Nothing to change for this goal on this image — it is already close.</div>';
+  }
+  plan.items.forEach(it => {
+    const row = document.createElement('div');
+    row.className = 'magic-row' + (it.enabled ? '' : ' off');
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.className = 'mi-cb'; cb.checked = it.enabled;
+    cb.setAttribute('aria-label', 'Include ' + it.label);
+    cb.addEventListener('change', () => { it.enabled = cb.checked; renderMagicPreview(); renderMagicPlan(); });
+
+    const main = document.createElement('div');
+    main.className = 'mi-main';
+    const top = document.createElement('div');
+    top.className = 'mi-top';
+    const lab = document.createElement('span');
+    lab.className = 'mi-label'; lab.textContent = it.label;
+    const grp = document.createElement('span');
+    grp.className = 'mi-group'; grp.textContent = it.group;
+    const val = document.createElement('span');
+    val.className = 'mi-val'; val.textContent = it.fmt(Math.round(it.value * 10) / 10);
+    top.appendChild(lab); top.appendChild(grp); top.appendChild(val);
+    main.appendChild(top);
+
+    const why = document.createElement('div');
+    why.className = 'mi-why'; why.textContent = it.why;
+    main.appendChild(why);
+
+    if (it.max > it.min) {
+      const r = document.createElement('input');
+      r.type = 'range'; r.min = it.min; r.max = it.max; r.step = it.step; r.value = it.value;
+      r.setAttribute('aria-label', it.label);
+      r.addEventListener('input', () => {
+        it.value = parseFloat(r.value);
+        val.textContent = it.fmt(Math.round(it.value * 10) / 10);
+        renderMagicPreview();
+      });
+      r.addEventListener('change', () => { paintRange(r); });
+      main.appendChild(r);
+      setTimeout(() => paintRange(r), 0);
+    }
+
+    row.appendChild(cb); row.appendChild(main);
+    host.appendChild(row);
+  });
+  renderMagicPreview();
+}
+
+function renderMagicPreview() {
+  const a = A(); if (!a || !magicState) return;
+  const out = magicOutput(magicState.plan, magicState.strength);
+  const maxW = 320;
+  const W = Math.min(maxW, a.source.width);
+  const H = Math.max(1, Math.round(W * a.source.height / a.source.width));
+  for (const [id, adj, curve, hsl] of [
+    ['#magicBefore', defaultAdj(), defaultCurve(), defaultHsl()],
+    ['#magicAfter', out.adj, out.curve, out.hsl]
+  ]) {
+    const cv = $(id);
+    cv.width = W; cv.height = H;
+    const x = cv.getContext('2d');
+    paint(x, a.source, W, H, adj, curve, hsl);
+  }
+}
+
+function magicReplan() {
+  magicState.prompt = $('#magicPrompt').value;
+  magicState.keep = $('#magicKeep').value;
+  // a described result wins over the selected goal, but only if it names one
+  let goal = magicState.plan.goal;
+  const f = magicParsePrompt(magicState.prompt);
+  if (f.matched.length) goal = f.matched[0].goal;
+  magicState.plan = magicBuildPlan(goal, magicState.prompt, magicState.keep, magicState.an);
+  buildMagicGoals();
+  renderMagicPlan();
+}
+
+function applyMagic() {
+  const a = A(); if (!a || !magicState) return;
+  const out = magicOutput(magicState.plan, magicState.strength);
+  const anyOn = magicState.plan.items.some(it => it.enabled);
+  if (!anyOn) { toast('Nothing selected to apply'); return; }
+  // keep any live adjustments, then lay the plan on top as its own step
+  if (adjChanged(a.adj) || curveActive(a.curve) || hslActive(a.hsl)) bakeLive(a);
+  pushOp({ type: 'adj', adj: out.adj, curve: out.curve, hsl: out.hsl });
+  const n = magicState.plan.items.filter(i => i.enabled).length;
+  closeMagic();
+  toast('Magic Edit applied — ' + magicState.plan.goalName + ', ' + n + ' adjustment' + (n === 1 ? '' : 's'));
+}
+
+function magicResetToOriginal() {
+  const a = A(); if (!a) return;
+  askConfirm('Reset to the original?',
+    'Every edit on "' + a.name + '" is discarded and the exact original pixels and dimensions are restored. This cannot be undone.',
+    'Reset').then(yes => {
+      if (!yes) return;
+      a.ops = []; a.index = -1;
+      a.adj = defaultAdj(); a.curve = defaultCurve(); a.hsl = defaultHsl();
+      cacheDropFrom(a, -1);            // nothing cached is valid any more
+      a.source = cloneCanvas(a.original);   // exact original pixels AND dimensions
+      cachePut(a, -1, a.source);
+      render(); refreshFilmstrip(); updateHistoryUI(); buildPanel(); scheduleSave();
+      closeMagic();
+      toast('Reset to the original');
+    });
+}
+
+$('#btnMagic').addEventListener('click', openMagic);
+$('#magicClose').addEventListener('click', closeMagic);
+$('#magicCancel').addEventListener('click', () => { closeMagic(); toast('Magic Edit cancelled — nothing changed'); });
+$('#magicApply').addEventListener('click', applyMagic);
+$('#magicReset').addEventListener('click', magicResetToOriginal);
+$('#magicPrompt').addEventListener('input', () => { clearTimeout(magicState && magicState._t);
+  magicState._t = setTimeout(magicReplan, 320); });
+$('#magicKeep').addEventListener('input', () => { clearTimeout(magicState && magicState._t);
+  magicState._t = setTimeout(magicReplan, 320); });
+$('#magicStrength').addEventListener('input', e => {
+  magicState.strength = parseFloat(e.target.value) / 100;
+  $('#magicStrengthVal').textContent = e.target.value + '%';
+  renderMagicPreview();
+});
+$('#magicStrength').addEventListener('change', e => paintRange(e.target));
+$('#magicOverlay').addEventListener('click', e => { if (e.target === $('#magicOverlay')) closeMagic(); });
 
 /* ----- FILTERS ----- */
 function buildFilters(P, F) {
@@ -4026,6 +4643,13 @@ function toast(msg) {
 window.addEventListener('resize', () => { if (A()) render(); });
 applySettings();
 buildPillBar();
+$('#magicAiNote').innerHTML =
+  '<b>Magic Edit is a local, rule-based planner, not an AI model.</b> It measures your image and ' +
+  'proposes adjustments from rules — the same kind of logic as the Auto Enhance button, but aimed at a ' +
+  'goal. Nothing is uploaded and it works offline.<br><br>' +
+  'A genuine AI mode would interpret free-form language with a real model. That needs a secure backend ' +
+  'to hold the credentials, and this app deliberately has none — an API key in the page would be visible ' +
+  'to anyone. So the AI mode is not available, and the local planner is offered instead.';
 probeFormats().then(() => { applyFormatSupport(); updateQualityUI(); });
 buildPanel();
 updateHistoryUI();

@@ -79,6 +79,30 @@ The tonal controls are deliberately separated rather than folded into one bright
 
 Every control is **exactly neutral at 0**, every slider has its own reset (double-click its label), and each is verified to stay monotonic so the ramp never inverts.
 
+## Magic Edit
+
+A **Magic Edit** button in the top bar opens a panel where you describe the result you want in plain
+language, or pick one of eight goals: **Natural, Cinematic, Brighten, Product, Portrait, Vintage, Restore,
+Artistic**.
+
+It is a **local, rule-based planner — not an AI model**, and the panel says so. It measures the image
+(darkness, contrast, clipping, saturation, colour cast, skin presence, noise, sharpness) and proposes only
+the adjustments that image actually needs:
+
+- A **dark** frame gets **shadow recovery**, not a blanket brightness lift — a blanket lift would wash out
+  the highlights it already has.
+- An **already-vivid** image is **pulled back** rather than pushed further into saturation.
+- **"keep the skin tones natural"** is understood: it selects Cinematic *and* holds the colour changes back.
+- **"keep the colours unchanged"** removes the colour adjustments from the plan entirely.
+
+Every proposed adjustment is listed with the reason it was chosen, and each one can be switched off or
+fine-tuned with its own slider. There is a live before/after preview, a strength control, and **Reset to
+original** which restores the exact original pixels *and dimensions* — not just zeroed sliders.
+
+Because it is a local planner, nothing is uploaded and it works offline. A genuine AI mode would need a
+secure backend to hold the credentials; this app deliberately has none, because an API key in the page
+would be visible to anyone.
+
 ## Performance notes
 
 - **Undo/redo is instant.** The canvas at each history index is cached (bounded at 150 MB), so stepping
