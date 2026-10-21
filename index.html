@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lumen Studio — Image Editor</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-VZfRNYkVWXa5e38LGG7gX5TSZLq7m9D41VbB/bzBUm8='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-PZSY2OJ6yXoOtwKp7UlIKRS/mgPD8BNWptFPDFZQSIc='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0c0d10">
@@ -677,6 +677,21 @@ input[type=range]::-moz-range-thumb{
 
 .hidden{display:none !important}
 
+/* ---------- watermark ---------- */
+.wm-thumb{margin-top:9px;padding:8px;border-radius:11px;background:var(--surface-2);
+  border:1px solid var(--stroke-soft);display:flex;justify-content:center}
+.wm-thumb img{max-width:100%;max-height:66px;object-fit:contain;display:block}
+
+/* ---------- presets ---------- */
+.save-row{display:flex;gap:8px;margin-top:9px}
+.save-row .text-input{flex:1;min-width:0}
+.save-row .tbtn{flex:0 0 auto}
+.preset-list{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+.preset-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:11px;
+  background:var(--surface-2);border:1px solid var(--stroke-soft)}
+.preset-name{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preset-row .tbtn{height:29px;font-size:12px;padding:0 10px}
+
 /* ---------- histogram ---------- */
 .hist{width:100%;height:74px;border-radius:11px;border:1px solid var(--stroke-soft);
   background:var(--surface-2);display:block}
@@ -1056,7 +1071,7 @@ html[data-size="xs"] .panel{max-height:48vh}
       <div class="sec" id="qualitySec">
         <div class="ctrl" style="margin-bottom:10px">
           <div class="ctrl-top"><span>Quality</span><span class="val" id="qVal">100%</span></div>
-          <input type="range" id="qRange" min="30" max="100" step="1" value="100">
+          <input type="range" id="qRange" min="30" max="100" step="1" value="100" aria-label="Export quality">
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <button class="tbtn" id="qReset" style="height:32px;font-size:12px">Reset to 100%</button>
@@ -1070,7 +1085,7 @@ html[data-size="xs"] .panel{max-height:48vh}
       <div class="sec hidden" id="bgSec">
         <div class="sec-label">Background</div>
         <div class="color-row">
-          <input type="color" id="expBg" value="#ffffff">
+          <input type="color" id="expBg" aria-label="JPEG background colour" value="#ffffff">
           <span class="hex">JPEG has no transparency — this fills behind it</span>
         </div>
       </div>
@@ -1081,11 +1096,11 @@ html[data-size="xs"] .panel{max-height:48vh}
       <div class="sec">
         <div class="toggle-row">
           <span>Save to your library</span>
-          <label class="switch"><input type="checkbox" id="expSaveLib" checked><span class="track"></span></label>
+          <label class="switch"><input type="checkbox" id="expSaveLib" aria-label="Also save to the dashboard" checked><span class="track"></span></label>
         </div>
         <div class="toggle-row">
           <span>Start a new edit afterwards</span>
-          <label class="switch"><input type="checkbox" id="expNewAfter" checked><span class="track"></span></label>
+          <label class="switch"><input type="checkbox" id="expNewAfter" aria-label="Start a new image after exporting" checked><span class="track"></span></label>
         </div>
       </div>
       <div class="sec">
@@ -1220,7 +1235,7 @@ html[data-size="xs"] .panel{max-height:48vh}
       <div class="sec">
         <div class="ctrl">
           <div class="ctrl-top"><span>Strength</span><span class="val" id="magicStrengthVal">100%</span></div>
-          <input type="range" id="magicStrength" min="20" max="150" step="5" value="100">
+          <input type="range" id="magicStrength" aria-label="Effect strength" min="20" max="150" step="5" value="100">
         </div>
       </div>
 
@@ -1302,11 +1317,11 @@ html[data-size="xs"] .panel{max-height:48vh}
         </div>
         <div class="set-row">
           <div class="set-lbl"><b>Reduce transparency</b><i>Drops the frosted blur. The single biggest speed-up on older phones.</i></div>
-          <label class="switch"><input type="checkbox" id="setPlain"><span class="track"></span></label>
+          <label class="switch"><input type="checkbox" id="setPlain" aria-label="Reduce transparency"><span class="track"></span></label>
         </div>
         <div class="set-row">
           <div class="set-lbl"><b>Reduce motion</b><i>Stops the logo glow and the panel animations.</i></div>
-          <label class="switch"><input type="checkbox" id="setMotion"><span class="track"></span></label>
+          <label class="switch"><input type="checkbox" id="setMotion" aria-label="Reduce motion"><span class="track"></span></label>
         </div>
       </div>
 
@@ -1335,7 +1350,7 @@ html[data-size="xs"] .panel{max-height:48vh}
         </div>
         <div class="set-row">
           <div class="set-lbl"><b>Autosave</b><i>Keeps your session so a crash or a refresh never loses work.</i></div>
-          <label class="switch"><input type="checkbox" id="setAutosave"><span class="track"></span></label>
+          <label class="switch"><input type="checkbox" id="setAutosave" aria-label="Autosave"><span class="track"></span></label>
         </div>
       </div>
 
@@ -1678,6 +1693,155 @@ async function paintOffThread(ctx, src, w, h, adj, curve, hsl, skipDetail) {
   return false;
 }
 
+/* ---------- page edge detection ----------
+   Estimate the background from the outer frame, then take the bounding box of
+   everything that differs from it. Deliberately conservative: a result that
+   looks wrong is worse than no result, so a weak or tiny box is refused and the
+   user is told to crop by hand. Whatever it finds lands in the normal crop UI,
+   where it can be dragged and corrected before anything is applied. */
+function detectPageBounds(cv) {
+  const W = 220, H = Math.max(1, Math.round(220 * cv.height / cv.width));
+  const c = makeCanvas(W, H);
+  const x = c.getContext('2d');
+  x.drawImage(cv, 0, 0, W, H);
+  const d = x.getImageData(0, 0, W, H).data;
+  const lum = (px, py) => { const i = (py * W + px) * 4;
+    return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; };
+
+  const border = [];
+  for (let px = 0; px < W; px++) { border.push(lum(px, 0)); border.push(lum(px, H - 1)); }
+  for (let py = 0; py < H; py++) { border.push(lum(0, py)); border.push(lum(W - 1, py)); }
+  border.sort((a, b) => a - b);
+  const bg = border[Math.floor(border.length / 2)];
+
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      if (Math.abs(lum(px, py) - bg) > 26) {
+        if (px < x0) x0 = px;
+        if (px > x1) x1 = px;
+        if (py < y0) y0 = py;
+        if (py > y1) y1 = py;
+      }
+    }
+  }
+  if (x1 < 0) return null;
+  if ((x1 - x0) < W * 0.15 || (y1 - y0) < H * 0.15) return null;
+  const px = Math.round(W * 0.008), py2 = Math.round(H * 0.008);
+  x0 = Math.max(0, x0 - px); y0 = Math.max(0, y0 - py2);
+  x1 = Math.min(W - 1, x1 + px); y1 = Math.min(H - 1, y1 + py2);
+  return { x: x0 / W, y: y0 / H, w: (x1 - x0 + 1) / W, h: (y1 - y0 + 1) / H };
+}
+
+/* ---------- presets & copy / paste ----------
+   A preset is just the live edit state, which is already the whole recipe:
+   adjustments, curve and HSL. Copy/paste moves that recipe between images. */
+const PRESET_KEY = 'lumen.presets';
+let editClipboard = null;
+
+function loadPresets() {
+  try { const r = JSON.parse(localStorage.getItem(PRESET_KEY) || '[]'); return Array.isArray(r) ? r : []; }
+  catch (e) { return []; }
+}
+function storePresets(list) {
+  try { localStorage.setItem(PRESET_KEY, JSON.stringify(list)); }
+  catch (e) { storageWarn('your presets could not be saved'); }
+}
+function captureEdit() {
+  const a = A();
+  if (!a) return null;
+  return { adj: Object.assign({}, a.adj),
+           curve: JSON.parse(JSON.stringify(a.curve)),
+           hsl: JSON.parse(JSON.stringify(a.hsl)) };
+}
+function applyEdit(e) {
+  const a = A();
+  if (!a || !e) return;
+  // fill from the defaults so a preset saved by an older build still applies
+  a.adj = Object.assign(defaultAdj(), e.adj || {});
+  a.curve = e.curve ? JSON.parse(JSON.stringify(e.curve)) : defaultCurve();
+  a.hsl = e.hsl ? JSON.parse(JSON.stringify(e.hsl)) : defaultHsl();
+  buildPanel(); render(); scheduleSave();
+}
+function renderPresets() {
+  const host = $('#presetList');
+  if (!host) return;
+  const list = loadPresets();
+  host.innerHTML = '';
+  if (!list.length) {
+    host.innerHTML = '<div class="magic-empty">No saved presets yet. Set up a look you like, then save it.</div>';
+    return;
+  }
+  list.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'preset-row';
+    const nm = document.createElement('span');
+    nm.className = 'preset-name';
+    nm.textContent = p.name;
+    nm.title = p.name;
+    const ap = document.createElement('button');
+    ap.className = 'tbtn'; ap.textContent = 'Apply';
+    ap.addEventListener('click', () => { applyEdit(p.edit); toast('Applied "' + p.name + '"'); });
+    const rm = document.createElement('button');
+    rm.className = 'tbtn'; rm.textContent = 'Delete';
+    rm.setAttribute('aria-label', 'Delete preset ' + p.name);
+    rm.addEventListener('click', () => {
+      const l = loadPresets(); l.splice(i, 1); storePresets(l); renderPresets();
+      toast('Preset deleted');
+    });
+    row.appendChild(nm); row.appendChild(ap); row.appendChild(rm);
+    host.appendChild(row);
+  });
+}
+
+function buildPresets(P) {
+  const s = sec();
+  s.appendChild(secLabel('Presets', 'save a look, reuse it on any image'));
+
+  const cp = document.createElement('div');
+  cp.className = 'grid2';
+  cp.appendChild(chip('Copy settings', false, () => {
+    editClipboard = captureEdit();
+    toast(editClipboard ? 'Settings copied — switch image and paste' : 'Nothing to copy');
+  }, '', 'Copy the current adjustments'));
+  cp.appendChild(chip('Paste settings', false, () => {
+    if (!editClipboard) { toast('Copy some settings first'); return; }
+    applyEdit(editClipboard);
+    toast('Settings pasted');
+  }, '', 'Apply the copied adjustments to this image'));
+  s.appendChild(cp);
+
+  const sr = document.createElement('div');
+  sr.className = 'save-row';
+  const nameIn = document.createElement('input');
+  nameIn.className = 'text-input';
+  nameIn.placeholder = 'Preset name';
+  nameIn.setAttribute('aria-label', 'Preset name');
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'tbtn primary';
+  saveBtn.textContent = 'Save preset';
+  saveBtn.addEventListener('click', () => {
+    const e = captureEdit();
+    if (!e) return;
+    const nm = (nameIn.value || '').trim().slice(0, 40) || ('Preset ' + (loadPresets().length + 1));
+    const l = loadPresets();
+    l.unshift({ name: nm, edit: e, at: Date.now() });
+    storePresets(l.slice(0, 24));
+    nameIn.value = '';
+    renderPresets();
+    toast('Saved preset "' + nm + '"');
+  });
+  sr.appendChild(nameIn); sr.appendChild(saveBtn);
+  s.appendChild(sr);
+
+  const list = document.createElement('div');
+  list.className = 'preset-list';
+  list.id = 'presetList';
+  s.appendChild(list);
+  P.appendChild(s);
+  setTimeout(renderPresets, 0);
+}
+
 /* ---------- histogram & clipping ----------
    Read from a small proxy of the edited image, which is plenty for a shape and
    cheap enough to redo whenever an edit settles. */
@@ -1756,27 +1920,84 @@ function refreshHistogram() {
 }
 
 /* ---------- watermark ---------- */
-function drawWatermark(g, w, h, wm) {
-  if (!wm || !wm.text) return;
+/* Logo watermarks load from a data URL, which is async. Keep the decoded
+   images around so a replay does not re-decode on every frame. */
+const wmImageCache = new Map();
+function wmImage(src) {
+  if (!src) return null;
+  let im = wmImageCache.get(src);
+  if (im) return im.complete && im.naturalWidth ? im : null;
+  im = new Image();
+  im.onload = () => { render(); refreshFilmstrip(); };   // repaint once it lands
+  im.onerror = () => { toast('That watermark image could not be loaded'); };
+  im.src = src;
+  wmImageCache.set(src, im);
+  return null;
+}
+
+function wmFont(wm, w) {
   const fs = Math.max(11, w * wm.size / 100);
+  return '600 ' + fs + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
+}
+
+function drawWatermark(g, w, h, wm) {
+  if (!wm) return;
+  const mode = wm.mode || 'text';
+  const isImg = mode === 'image' && !!wm.image;
+  if (!isImg && !wm.text) return;
+
+  const pad = Math.max(0, w * (wm.margin === undefined ? 2.5 : wm.margin) / 100);
+  const angle = (wm.angle || 0) * Math.PI / 180;
+
   g.save();
   g.globalAlpha = wm.opacity;
   g.fillStyle = wm.color;
-  g.font = '600 ' + fs + 'px "Space Grotesk", sans-serif';
-  const pad = fs * 0.7;
-  if (wm.rotate) {
-    g.translate(w / 2, h / 2);
-    g.rotate(-Math.PI / 4);
+
+  if (mode === 'tiled') {
+    /* repeat across the whole frame. The grid is computed in the rotated
+       frame and the span is the diagonal, so no edge is ever left bare. */
+    const fs = Math.max(11, w * wm.size / 100);
+    g.font = wmFont(wm, w);
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText(wm.text, 0, 0);
+    g.translate(w / 2, h / 2);
+    g.rotate(angle);
+    const label = wm.text || '©';
+    // spacing is a multiple of the label's own size, so a longer phrase simply
+    // spreads out rather than colliding with itself
+    const gap = 1 + (wm.tileGap === undefined ? 0.6 : wm.tileGap);
+    const stepX = Math.max(fs * 2, label.length * fs * 0.62) * gap;
+    const stepY = fs * 2.4 * gap;
+    const span = Math.hypot(w, h) / 2 + stepX;
+    for (let y = -span; y <= span; y += stepY) {
+      for (let x = -span; x <= span; x += stepX) g.fillText(label, x, y);
+    }
+  } else if (isImg) {
+    const im = wmImage(wm.image);
+    if (im) {
+      const targetW = Math.max(8, w * (wm.imgScale || 26) / 100);
+      const targetH = targetW * (im.naturalHeight / im.naturalWidth);
+      const pos = wm.pos || 'br';
+      let cx = pos.includes('l') ? pad + targetW / 2
+             : pos.includes('r') ? w - pad - targetW / 2 : w / 2;
+      let cy = pos.includes('t') ? pad + targetH / 2
+             : pos.includes('b') ? h - pad - targetH / 2 : h / 2;
+      g.translate(cx, cy);
+      g.rotate(angle);
+      g.drawImage(im, -targetW / 2, -targetH / 2, targetW, targetH);
+    }
   } else {
-    const pos = wm.pos;
-    g.textBaseline = 'alphabetic';
+    const fs = Math.max(11, w * wm.size / 100);
+    g.font = wmFont(wm, w);
+    const pos = wm.pos || 'br';
     g.textAlign = pos.includes('l') ? 'left' : pos.includes('r') ? 'right' : 'center';
-    let x = pos.includes('l') ? pad : pos.includes('r') ? w - pad : w / 2;
-    let y = pos.includes('t') ? pad + fs : pos.includes('b') ? h - pad : h / 2 + fs / 3;
-    g.fillText(wm.text, x, y);
+    g.textBaseline = 'middle';
+    const x = pos.includes('l') ? pad : pos.includes('r') ? w - pad : w / 2;
+    const y = pos.includes('t') ? pad + fs / 2
+            : pos.includes('b') ? h - pad - fs / 2 : h / 2;
+    g.translate(x, y);
+    g.rotate(angle);
+    g.fillText(wm.text, 0, 0);
   }
   g.restore();
 }
@@ -1794,7 +2015,8 @@ const S = {
   lastFit: 1,
   exportFormat: 'image/png',
   exportQuality: 1,
-  watermark: { text:'', size:5, opacity:.7, color:'#ffffff', pos:'br', rotate:false }
+  watermark: { mode:'text', text:'', image:'', size:5, opacity:.7, color:'#ffffff',
+               pos:'br', angle:0, margin:2.5, imgScale:26, tileGap:0.6 }
 };
 const A = () => S.images[S.activeIdx] || null;
 
@@ -2309,6 +2531,7 @@ function slider(label, get, set, min, max, step, fmt, dbl) {
   const input = row.querySelector('input');
   const val = row.querySelector('.val');
   input.min = min; input.max = max; input.step = step; input.value = get();
+  input.setAttribute('aria-label', label);
   const show = v => val.textContent = fmt ? fmt(v) : v;
   show(get());
   paintRange(input);
@@ -2366,6 +2589,39 @@ function sec() {
 }
 
 /* ---------- build panel per tool ---------- */
+/* The panel builders are many and easy to extend, so rather than trusting each
+   one to remember accessibility, name anything left unnamed from its own visible
+   label once the panel is built. */
+function labelPanelControls(root) {
+  root.querySelectorAll('.ctrl input[type=range]').forEach(i => {
+    if (i.getAttribute('aria-label')) return;
+    const t = i.closest('.ctrl') && i.closest('.ctrl').querySelector('.ctrl-top span');
+    if (t && t.textContent.trim()) i.setAttribute('aria-label', t.textContent.trim());
+  });
+  root.querySelectorAll('.toggle-row input[type=checkbox], .set-row input[type=checkbox]').forEach(i => {
+    if (i.getAttribute('aria-label')) return;
+    const row = i.closest('.toggle-row') || i.closest('.set-row');
+    const t = row && (row.querySelector('span') || row.querySelector('.set-lbl b'));
+    if (t && t.textContent.trim()) i.setAttribute('aria-label', t.textContent.trim());
+  });
+  root.querySelectorAll('.color-row input[type=color]').forEach(i => {
+    if (!i.getAttribute('aria-label')) i.setAttribute('aria-label', 'Colour');
+  });
+  // bare colour swatches: they are chips with no text at all
+  root.querySelectorAll('.chip').forEach(c => {
+    if ((c.textContent || '').trim() || c.getAttribute('title') || c.getAttribute('aria-label')) return;
+    const sw = c.querySelector('span[style*="background"]');
+    if (!sw) return;
+    const m = /background:\s*([^;"']+)/.exec(sw.getAttribute('style') || '');
+    const name = m ? 'Colour ' + m[1].trim() : 'Colour swatch';
+    c.title = name;
+    c.setAttribute('aria-label', name);
+  });
+  root.querySelectorAll('input[type=range], input[type=color]').forEach(i => {
+    if (!i.getAttribute('aria-label')) i.setAttribute('aria-label', 'Adjustment');
+  });
+}
+
 function buildPanel() {
   const rail = $('#rail');
   if (!rail.dataset.built) {
@@ -2411,6 +2667,8 @@ function buildPanel() {
   else if (S.tool === 'scan') buildScan(P, F);
   else if (S.tool === 'frame') buildFrame(P, F);
   else if (S.tool === 'watermark') buildWatermark(P, F);
+
+  labelPanelControls(P);
 }
 
 /* ----- CROP ----- */
@@ -2746,6 +3004,8 @@ function buildAdjust(P, F) {
   s.appendChild(slider('Exposure', () => a.adj.exposure, v => a.adj.exposure = v, -100, 100, 1, v => v, () => a.adj.exposure = 0));
   s.appendChild(slider('Fade', () => a.adj.fade, v => a.adj.fade = v, 0, 100, 1, v => v, () => a.adj.fade = 0));
   P.appendChild(s);
+
+  buildPresets(P);
 
   const hsec = sec();
   hsec.appendChild(secLabel('Histogram', 'the edited image, red green blue'));
@@ -3229,6 +3489,7 @@ function magicOutput(plan, strength) {
 let magicState = null;
 
 function openMagic() {
+  setTimeout(() => labelPanelControls(document), 0);
   const a = A();
   if (!a) { toast('Load an image first'); return; }
   const an = magicAnalyze(a.source);
@@ -3464,6 +3725,19 @@ function buildScan(P, F) {
     a.adj.adaptive = e.target.checked ? 1 : 0; render(); scheduleSave();
   });
   s2.appendChild(tg);
+  const dg = document.createElement('div');
+  dg.className = 'grid2';
+  dg.appendChild(chip('Detect page edges', false, () => {
+    const b = detectPageBounds(a.source);
+    if (!b) { toast('No clear page edge found — crop it by hand'); return; }
+    S.ratio = null;
+    S.crop = b;
+    S.tool = 'crop';
+    buildPanel();
+    render();
+    toast('Edges detected — drag the crop to correct them');
+  }, '', 'Find the page and open the crop tool to confirm it'));
+  s2.appendChild(dg);
   s2.appendChild(noteBlock('Threshold turns pixels above the level pure white and the rest black — ideal for crisp text. ' +
     '<b>Adaptive</b> compares each pixel with its local surroundings instead of one global level, so text survives ' +
     'uneven lighting on a photographed page; with it on, the slider becomes a bias (128 is neutral). ' +
@@ -3518,13 +3792,62 @@ function buildFrame(P, F) {
 function buildWatermark(P, F) {
   const wm = S.watermark;
   const s = sec();
-  s.appendChild(secLabel('Text'));
+  s.appendChild(secLabel('Watermark', 'text, a logo, or a tiled pattern'));
+
+  const mg = document.createElement('div');
+  mg.className = 'grid3';
+  [['text', 'Text'], ['image', 'Logo'], ['tiled', 'Tiled']].forEach(([m, label]) => {
+    const c = chip(label, wm.mode === m, () => { wm.mode = m; buildPanel(); }, '', label + ' watermark');
+    mg.appendChild(c);
+  });
+  s.appendChild(mg);
+
   const ti = document.createElement('input');
   ti.className = 'text-input';
   ti.placeholder = '© Your name 2026';
   ti.value = wm.text;
+  ti.style.marginTop = '9px';
+  ti.setAttribute('aria-label', 'Watermark text');
   ti.addEventListener('input', () => wm.text = ti.value);
   s.appendChild(ti);
+
+  // logo picker
+  const up = document.createElement('div');
+  up.className = 'save-row';
+  const fileIn = document.createElement('input');
+  fileIn.type = 'file';
+  fileIn.accept = 'image/*';
+  fileIn.style.display = 'none';
+  const pick = document.createElement('button');
+  pick.className = 'tbtn';
+  pick.textContent = wm.image ? 'Replace logo' : 'Choose logo…';
+  pick.addEventListener('click', () => fileIn.click());
+  const clear = document.createElement('button');
+  clear.className = 'tbtn';
+  clear.textContent = 'Remove';
+  clear.disabled = !wm.image;
+  clear.addEventListener('click', () => { wm.image = ''; buildPanel(); });
+  fileIn.addEventListener('change', () => {
+    const f = fileIn.files && fileIn.files[0];
+    if (!f) return;
+    if (!/^image\//.test(f.type)) { toast('That is not an image'); return; }
+    if (f.size > 4 * 1024 * 1024) { toast('Logo is too large — keep it under 4 MB'); return; }
+    const fr = new FileReader();
+    fr.onload = () => { wm.image = String(fr.result); wm.mode = 'image'; buildPanel(); toast('Logo added'); };
+    fr.onerror = () => toast('Could not read that file');
+    fr.readAsDataURL(f);
+  });
+  up.appendChild(pick); up.appendChild(clear); up.appendChild(fileIn);
+  s.appendChild(up);
+  if (wm.image) {
+    const thumb = document.createElement('div');
+    thumb.className = 'wm-thumb';
+    const im = document.createElement('img');
+    im.alt = 'Watermark logo';
+    im.src = wm.image;
+    thumb.appendChild(im);
+    s.appendChild(thumb);
+  }
   P.appendChild(s);
 
   const s2 = sec();
@@ -3539,11 +3862,18 @@ function buildWatermark(P, F) {
     cr.querySelector('.hex').textContent = wm.color.toUpperCase();
   });
   s2.appendChild(cr);
-  const tr = document.createElement('div');
-  tr.className = 'toggle-row';
-  tr.innerHTML = '<span>Diagonal watermark</span><label class="switch"><input type="checkbox"' + (wm.rotate ? ' checked' : '') + '><span class="track"></span></label>';
-  tr.querySelector('input').addEventListener('change', e => wm.rotate = e.target.checked);
-  s2.appendChild(tr);
+  if (wm.mode === 'image') {
+    s2.appendChild(slider('Logo width', () => wm.imgScale, v => wm.imgScale = v, 4, 80, 1, v => Math.round(v) + '%',
+      () => wm.imgScale = 26));
+  }
+  if (wm.mode === 'tiled') {
+    s2.appendChild(slider('Tile spacing', () => wm.tileGap, v => wm.tileGap = v, 0, 5, 0.1, v => v.toFixed(1) + '×',
+      () => wm.tileGap = 0.6));
+  }
+  s2.appendChild(slider('Rotation', () => wm.angle, v => wm.angle = v, -180, 180, 1, v => Math.round(v) + '°',
+    () => wm.angle = 0));
+  s2.appendChild(slider('Margin', () => wm.margin, v => wm.margin = v, 0, 20, 0.5, v => v.toFixed(1) + '%',
+    () => wm.margin = 2.5));
   P.appendChild(s2);
 
   const s3 = sec();
@@ -3909,6 +4239,7 @@ document.addEventListener('keydown', e => {
 
 /* ---------- export ---------- */
 function openExport() {
+  setTimeout(() => labelPanelControls(document), 0);
   const a = A();
   if (!a) { toast('Load an image first'); return; }
   // the settings default decides what this dialog opens with
@@ -4467,13 +4798,20 @@ function toast(msg) {
 window.addEventListener('resize', () => { if (A()) render(); });
 applySettings();
 buildPillBar();
+labelPanelControls(document);          // modals and settings are not in the panel
 $('#magicAiNote').innerHTML =
   '<b>Magic Edit is a local, rule-based planner, not an AI model.</b> It measures your image and ' +
   'proposes adjustments from rules — the same kind of logic as the Auto Enhance button, but aimed at a ' +
   'goal. Nothing is uploaded and it works offline.<br><br>' +
   'A genuine AI mode would interpret free-form language with a real model. That needs a secure backend ' +
   'to hold the credentials, and this app deliberately has none — an API key in the page would be visible ' +
-  'to anyone. So the AI mode is not available, and the local planner is offered instead.';
+  'to anyone. So the AI mode is <b>not connected</b>, and the local planner is offered instead.<br><br>' +
+  '<b>What a backend would have to provide.</b> One endpoint that takes a prompt and a downscaled ' +
+  'preview and returns an edit plan in the shape this app already uses (an adjustments object, a tone ' +
+  'curve and an HSL set). The planner below would be unchanged — only the source of the plan would ' +
+  'change. It would also need, before anything is sent: an explicit per-image consent prompt, a clear ' +
+  'statement that the image leaves the device, and no credentials anywhere in this page. Until those ' +
+  'exist, Auto Enhance is the honest option.';
 probeFormats().then(() => { applyFormatSupport(); updateQualityUI(); });
 buildPanel();
 updateHistoryUI();

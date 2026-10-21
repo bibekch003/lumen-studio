@@ -79,6 +79,26 @@ The tonal controls are deliberately separated rather than folded into one bright
 
 Every control is **exactly neutral at 0**, every slider has its own reset (double-click its label), and each is verified to stay monotonic so the ramp never inverts.
 
+## Presets and copy/paste
+
+Set up a look you like and save it as a named preset — a preset captures the whole recipe, meaning the
+adjustments, the tone curve and the HSL mix. Presets are stored in the browser and can be applied to any
+image. **Copy settings** and **Paste settings** move the same recipe from one image to another, which is
+the usual way to make a set of photos match.
+
+## Watermark
+
+Three modes: **text**, a **logo** image, or a **tiled** pattern repeated across the frame. All three share
+free **rotation** (any angle, not just 45°), **margins**, **size**, **opacity**, colour and the nine
+position presets. A logo is read from your device, kept in the page, and never uploaded.
+
+## Scan: find the page first
+
+**Detect page edges** estimates the background from the outer frame, then takes the bounding box of
+everything that differs from it — a photographed page on a desk, a receipt on a table. The result is
+dropped into the ordinary crop tool, so you can drag it to correct it before anything is applied. A weak
+or tiny detection is refused outright rather than guessing, because a wrong auto-crop is worse than none.
+
 ## Histogram and clipping
 
 The Adjust panel opens with a live RGB histogram of the edited image, plus the percentage of pixels that
@@ -91,6 +111,13 @@ it exists. The overlay is opt-in because it costs an extra read of the display c
 Film grain is applied from a hash of the pixel index rather than a random number generator, so replaying
 an edit always reproduces the identical frame — a random grain would make every undo look different. It
 reads strongest in the midtones and fades at both ends. At 0 it is a byte-exact no-op.
+
+## Accessibility
+
+Every control in the app carries an accessible name. Rather than trusting each panel builder to remember,
+a pass runs after the panel is built and names anything unnamed from its own visible label — so a new
+control cannot silently regress. Chips are keyboard-activatable with Enter or Space and expose their
+tooltip as a label. Verified: zero unnamed controls across all eight tool panels, the modals and settings.
 
 ## Magic Edit
 
