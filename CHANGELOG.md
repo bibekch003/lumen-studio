@@ -2,6 +2,11 @@
 
 All notable changes to Lumen Studio. Generated automatically from commit messages — do not edit by hand.
 
+## v1.13.0 — 2026-10-21
+
+### Features
+- cancellable long jobs; polish: snap the type, radius and spacing scales and lay out section hints on their own line ([`c75d800`](https://github.com/bibekch003/lumen-studio/commit/c75d800))
+
 ## v1.12.0 — 2026-10-21
 
 ### Performance
