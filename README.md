@@ -113,9 +113,19 @@ would be visible to anyone.
 - **Exporting shows a "Rendering at full resolution" state** before it starts, so a long export never
   looks like a dead tab.
 
-*Known limit:* a full-resolution commit still does its pixel work on the main thread and can block for
-roughly a quarter of a second on a large image. Moving the pipeline to a Web Worker with OffscreenCanvas
-is the fix; it needs testing on real hardware before it can be trusted.
+- **Full-resolution export runs off the main thread.** The pipeline lives in `pixels.js`, which is loaded
+  both by the page and by `pixel-worker.js` — so there is one copy of the maths, not two. The worker
+  receives the source as an `ImageBitmap` (a handle, not a copy of the pixels) and hands back the finished
+  frame the same way. Measured at 3200×1800: the main thread blocked for **2078 ms** on the old path and
+  **236 ms** through the worker.
+
+  The trade-off is real and worth stating: total time is *higher* through the worker (~4.1 s vs ~2.1 s)
+  because the bitmap round trip costs a copy, and because this machine has no GPU. The point is not that
+  the work is faster — it is that the interface stays alive while it happens.
+
+*Known limit:* editing **commits** still do their pixel work on the main thread, so applying a heavy
+adjustment to a very large image can still pause the interface for roughly a quarter of a second. The
+worker currently covers export only.
 
 ## Detail: sharpen and denoise
 

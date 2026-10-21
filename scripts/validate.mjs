@@ -88,7 +88,14 @@ for (const marker of ['Content-Security-Policy', "connect-src 'none'", 'manifest
 }
 note(`${html.includes("connect-src 'none'") ? 'ok  ' : 'FAIL'} CSP still blocks outbound connections`);
 
-/* 6. the CSP script hashes must match the inline scripts ------------------ */
+/* 6. the shared pipeline files must exist and be precached ----------------- */
+for (const f of ['pixels.js', 'pixel-worker.js']) {
+  if (!existsSync(at(f))) problems.push(`missing shared pipeline file: ${f}`);
+  else if (!swSrc.includes(`'./${f}'`)) problems.push(`sw.js does not precache ${f}`);
+}
+note(`${existsSync(at('pixels.js')) && swSrc.includes("'./pixels.js'") ? 'ok  ' : 'FAIL'} pixels.js + pixel-worker.js present and precached`);
+
+/* 7. the CSP script hashes must match the inline scripts ------------------ */
 {
   const { checkCsp } = await import('./lib/csp.mjs');
   const csp = checkCsp(html);

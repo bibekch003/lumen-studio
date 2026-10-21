@@ -14,6 +14,8 @@ const CACHE = 'lumen-' + VERSION;
 const CORE = [
   './',
   './index.html',
+  './pixels.js',
+  './pixel-worker.js',
   './version.json',
   './manifest.webmanifest',
   './icons/logo-mark.png',
