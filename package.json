@@ -1,6 +1,6 @@
 {
   "name": "lumen-studio",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "private": true,
   "description": "Lumen Studio — browser-based image editor. Static PWA, no build step, no runtime dependencies.",
   "license": "MIT",
