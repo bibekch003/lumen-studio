@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lumen Studio — Image Editor</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-s6jEXP+vkcj24eAbIPx0Cc3JN42lX3uUms0ipvbGGrA='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-ncK3cgNMKxbxyhxuoEI2xQYAJEHuIuIfsfnbFXrvnv4='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0c0d10">
@@ -1414,11 +1414,6 @@ const $ = s => document.querySelector(s);
 
 /* ---------- canvas helpers ---------- */
 const uid = () => Math.random().toString(36).slice(2, 9);
-function cloneCanvas(src) {
-  const c = makeCanvas(src.width, src.height);
-  c.getContext('2d').drawImage(src, 0, 0);
-  return c;
-}
 
 /* ---------- adjustment model ---------- */
 function defaultAdj() {
@@ -1654,6 +1649,34 @@ function getPixelWorker() {
   return pixelWorker;
 }
 const workerUnsupported = new Set();
+function workerCall(wk, msg, transfer) {
+  return new Promise((resolve, reject) => {
+    const id = ++pixelWorkerSeq;
+    const onMsg = (ev) => {
+      const d = ev.data;
+      if (!d || d.id !== id) return;
+      wk.removeEventListener('message', onMsg);
+      if (!d.ok) reject(new Error(d.error || 'worker failed'));
+      else resolve(d);
+    };
+    wk.addEventListener('message', onMsg);
+    wk.postMessage(Object.assign({ id }, msg), transfer || []);
+  });
+}
+/* Give the worker a copy of the pristine image. One transfer per image, not
+   per edit — that is what makes handing over a replay cheap. */
+async function workerSetOriginal(canvas) {
+  const wk = getPixelWorker();
+  if (!wk) return false;
+  try {
+    /* A canvas that already has a 2D context cannot be transferred, so send the
+       pixels as an ImageBitmap and let the worker build its own canvas. This is
+       once per image, not once per edit. */
+    const bm = await createImageBitmap(canvas);
+    await workerCall(wk, { cmd: 'setOriginal', bitmap: bm, w: canvas.width, h: canvas.height }, [bm]);
+    return true;
+  } catch (e) { return false; }
+}
 function pixelWorkerPaint(src, w, h, adj, curve, hsl, skipDetail) {
   return new Promise((resolve, reject) => {
     const wk = getPixelWorker();
@@ -1922,85 +1945,8 @@ function refreshHistogram() {
 /* ---------- watermark ---------- */
 /* Logo watermarks load from a data URL, which is async. Keep the decoded
    images around so a replay does not re-decode on every frame. */
-const wmImageCache = new Map();
-function wmImage(src) {
-  if (!src) return null;
-  let im = wmImageCache.get(src);
-  if (im) return im.complete && im.naturalWidth ? im : null;
-  im = new Image();
-  im.onload = () => { render(); refreshFilmstrip(); };   // repaint once it lands
-  im.onerror = () => { toast('That watermark image could not be loaded'); };
-  im.src = src;
-  wmImageCache.set(src, im);
-  return null;
-}
 
-function wmFont(wm, w) {
-  const fs = Math.max(11, w * wm.size / 100);
-  return '600 ' + fs + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
-}
 
-function drawWatermark(g, w, h, wm) {
-  if (!wm) return;
-  const mode = wm.mode || 'text';
-  const isImg = mode === 'image' && !!wm.image;
-  if (!isImg && !wm.text) return;
-
-  const pad = Math.max(0, w * (wm.margin === undefined ? 2.5 : wm.margin) / 100);
-  const angle = (wm.angle || 0) * Math.PI / 180;
-
-  g.save();
-  g.globalAlpha = wm.opacity;
-  g.fillStyle = wm.color;
-
-  if (mode === 'tiled') {
-    /* repeat across the whole frame. The grid is computed in the rotated
-       frame and the span is the diagonal, so no edge is ever left bare. */
-    const fs = Math.max(11, w * wm.size / 100);
-    g.font = wmFont(wm, w);
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.translate(w / 2, h / 2);
-    g.rotate(angle);
-    const label = wm.text || '©';
-    // spacing is a multiple of the label's own size, so a longer phrase simply
-    // spreads out rather than colliding with itself
-    const gap = 1 + (wm.tileGap === undefined ? 0.6 : wm.tileGap);
-    const stepX = Math.max(fs * 2, label.length * fs * 0.62) * gap;
-    const stepY = fs * 2.4 * gap;
-    const span = Math.hypot(w, h) / 2 + stepX;
-    for (let y = -span; y <= span; y += stepY) {
-      for (let x = -span; x <= span; x += stepX) g.fillText(label, x, y);
-    }
-  } else if (isImg) {
-    const im = wmImage(wm.image);
-    if (im) {
-      const targetW = Math.max(8, w * (wm.imgScale || 26) / 100);
-      const targetH = targetW * (im.naturalHeight / im.naturalWidth);
-      const pos = wm.pos || 'br';
-      let cx = pos.includes('l') ? pad + targetW / 2
-             : pos.includes('r') ? w - pad - targetW / 2 : w / 2;
-      let cy = pos.includes('t') ? pad + targetH / 2
-             : pos.includes('b') ? h - pad - targetH / 2 : h / 2;
-      g.translate(cx, cy);
-      g.rotate(angle);
-      g.drawImage(im, -targetW / 2, -targetH / 2, targetW, targetH);
-    }
-  } else {
-    const fs = Math.max(11, w * wm.size / 100);
-    g.font = wmFont(wm, w);
-    const pos = wm.pos || 'br';
-    g.textAlign = pos.includes('l') ? 'left' : pos.includes('r') ? 'right' : 'center';
-    g.textBaseline = 'middle';
-    const x = pos.includes('l') ? pad : pos.includes('r') ? w - pad : w / 2;
-    const y = pos.includes('t') ? pad + fs / 2
-            : pos.includes('b') ? h - pad - fs / 2 : h / 2;
-    g.translate(x, y);
-    g.rotate(angle);
-    g.fillText(wm.text, 0, 0);
-  }
-  g.restore();
-}
 
 /* ---------- application state ---------- */
 const S = {
@@ -2021,69 +1967,6 @@ const S = {
 const A = () => S.images[S.activeIdx] || null;
 
 /* ---------- op-based history ---------- */
-function applyOp(cv, op) {
-  if (op.type === 'crop') {
-    const c = makeCanvas(op.w, op.h);
-    c.getContext('2d').drawImage(cv, op.x, op.y, op.w, op.h, 0, 0, op.w, op.h);
-    return c;
-  }
-  if (op.type === 'resize') {
-    const c = makeCanvas(op.w, op.h);
-    const g = c.getContext('2d');
-    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
-    g.drawImage(cv, 0, 0, op.w, op.h);
-    return c;
-  }
-  if (op.type === 'rotate90') {
-    const c = makeCanvas(cv.height, cv.width);
-    const g = c.getContext('2d');
-    g.translate(c.width / 2, c.height / 2);
-    g.rotate(op.dir * Math.PI / 2);
-    g.drawImage(cv, -cv.width / 2, -cv.height / 2);
-    return c;
-  }
-  if (op.type === 'rotate') {
-    const rad = op.deg * Math.PI / 180;
-    const w = cv.width, h = cv.height;
-    const nw = Math.abs(w * Math.cos(rad)) + Math.abs(h * Math.sin(rad));
-    const nh = Math.abs(w * Math.sin(rad)) + Math.abs(h * Math.cos(rad));
-    const c = makeCanvas(nw, nh);
-    const g = c.getContext('2d');
-    g.translate(c.width / 2, c.height / 2);
-    g.rotate(rad);
-    g.drawImage(cv, -w / 2, -h / 2);
-    return c;
-  }
-  if (op.type === 'flip') {
-    const c = makeCanvas(cv.width, cv.height);
-    const g = c.getContext('2d');
-    if (op.axis === 'h') { g.translate(cv.width, 0); g.scale(-1, 1); }
-    else { g.translate(0, cv.height); g.scale(1, -1); }
-    g.drawImage(cv, 0, 0);
-    return c;
-  }
-  if (op.type === 'frame') {
-    const p = op.pad;
-    const c = makeCanvas(cv.width + p * 2, cv.height + p * 2);
-    const g = c.getContext('2d');
-    g.fillStyle = op.color;
-    g.fillRect(0, 0, c.width, c.height);
-    g.drawImage(cv, p, p);
-    return c;
-  }
-  if (op.type === 'adj') {
-    const c = makeCanvas(cv.width, cv.height);
-    const g = c.getContext('2d');
-    paint(g, cv, c.width, c.height, op.adj || defaultAdj(), op.curve || defaultCurve(), op.hsl || defaultHsl());
-    return c;
-  }
-  if (op.type === 'watermark') {
-    const c = cloneCanvas(cv);
-    drawWatermark(c.getContext('2d'), c.width, c.height, op.wm);
-    return c;
-  }
-  return cv;
-}
 
 /* ---- replay cache ----
    Recomputing every op from the original on each undo is what made undo take
@@ -2138,6 +2021,52 @@ function endJob(token) {
   if (bar) bar.classList.add('hidden');
 }
 
+/* Rebuild from the operation stack in the worker. Only the op list crosses —
+   the pixels stay put — so the main thread never blocks on the pixel work.
+   Anything unexpected falls back to the synchronous path. */
+let replayBusy = false;
+async function replayAsync() {
+  const a = A();
+  if (!a) return;
+  const wk = getPixelWorker();
+  if (!wk || workerUnsupported.has('replay')) { replay(); return; }
+  if (replayBusy) { replay(); return; }          // never overlap two rebuilds
+  // a step we have already built is a pointer swap, not a rebuild
+  const hit = replayCache.get(cacheKey(a, a.index));
+  if (hit) {
+    a.source = hit;
+    render(); refreshFilmstrip(); updateHistoryUI(); scheduleSave();
+    return;
+  }
+  replayBusy = true;
+  const big = a.original.width * a.original.height > 2200000;
+  const token = big ? beginJob('Rebuilding the image') : null;
+  try {
+    if (!a._wSynced) {
+      const ok = await workerSetOriginal(a.original);
+      if (!ok) throw new Error('sync failed');
+      a._wSynced = true;
+    }
+    const r = await workerCall(wk, { cmd: 'replay', ops: a.ops, index: a.index });
+    if (token && token.cancelled) throw new Error('cancelled');
+    const c = makeCanvas(r.w, r.h);
+    c.getContext('2d').drawImage(r.bitmap, 0, 0);
+    if (r.bitmap.close) r.bitmap.close();
+    cachePut(a, a.index, c);
+    cachePrune();
+    a.source = c;
+    render(); refreshFilmstrip(); updateHistoryUI(); scheduleSave();
+  } catch (e) {
+    if (!/cancel/.test(e.message)) {
+      workerUnsupported.add('replay');
+      replay();                                   // do it the old way instead
+    }
+  } finally {
+    replayBusy = false;
+    if (token) endJob(token);
+  }
+}
+
 function replay() {
   const a = A();
   if (!a) return;
@@ -2173,10 +2102,10 @@ function pushOp(op) {
   a.ops = a.ops.slice(0, a.index + 1);
   a.ops.push(op);
   a.index = a.ops.length - 1;
-  replay();
+  replayAsync();
 }
-function undo() { const a = A(); if (a && a.index >= 0) { a.index--; replay(); toast('Undo'); } }
-function redo() { const a = A(); if (a && a.index < a.ops.length - 1) { a.index++; replay(); toast('Redo'); } }
+function undo() { const a = A(); if (a && a.index >= 0) { a.index--; replayAsync(); toast('Undo'); } }
+function redo() { const a = A(); if (a && a.index < a.ops.length - 1) { a.index++; replayAsync(); toast('Redo'); } }
 function updateHistoryUI() {
   const a = A();
   $('#btnUndo').disabled = !a || a.index < 0;
@@ -3633,6 +3562,7 @@ function magicResetToOriginal() {
       if (!yes) return;
       a.ops = []; a.index = -1;
       a.adj = defaultAdj(); a.curve = defaultCurve(); a.hsl = defaultHsl();
+      a._wSynced = false;              // the worker's copy is stale now
       cacheDropFrom(a, -1);            // nothing cached is valid any more
       a.source = cloneCanvas(a.original);   // exact original pixels AND dimensions
       cachePut(a, -1, a.source);
@@ -4169,6 +4099,7 @@ async function revertToOriginal() {
   if (!yes) return;
   a.ops = []; a.index = -1;
   a.adj = defaultAdj(); a.curve = defaultCurve(); a.hsl = defaultHsl();
+  a._wSynced = false;                // the worker's copy is stale now
   replay(); buildPanel();
   scheduleSave();
   toast('Reverted to original');

@@ -407,3 +407,185 @@ function paint(ctx, src, w, h, a, curve, hsl, skipSharpen) {
   ctx.filter = 'none';
   if (needsPixel(a, curve, hsl)) pixelOps(ctx, w, h, a, curve, hsl, skipSharpen);
 }
+
+
+/* ===========================================================================
+   Applying an operation, and drawing a watermark.
+   These live here rather than in the page so the worker can run a whole replay
+   with exactly the same code the main thread would use.
+   =========================================================================== */
+
+const wmImageCache = new Map();
+function wmImage(src) {
+  if (!src) return null;
+  let e = wmImageCache.get(src);
+  if (e) return e.ready ? e.bitmap : null;      // still decoding -> draw nothing yet
+  e = { ready: false, bitmap: null };
+  wmImageCache.set(src, e);
+
+  if (typeof document === 'undefined') {
+    /* worker: decode the data URL locally. No network, no fetch — connect-src
+       is 'none', so anything else would simply fail. */
+    const m = /^data:([^;]+);base64,(.*)$/.exec(src);
+    if (!m) return null;
+    try {
+      const bin = atob(m[2]);
+      const u = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      createImageBitmap(new Blob([u], { type: m[1] }))
+        .then(bm => { e.bitmap = bm; e.ready = true; })
+        .catch(() => {});
+    } catch (err) { /* leave it unready; the op will be skipped */ }
+  } else {
+    const img = new Image();
+    img.onload = () => {
+      e.bitmap = img; e.ready = true;
+      if (typeof render === 'function') render();
+    };
+    img.onerror = () => { if (typeof toast === 'function') toast('That watermark image could not be loaded'); };
+    img.src = src;
+  }
+  return null;
+}
+
+function wmFont(wm, w) {
+  const fs = Math.max(11, w * wm.size / 100);
+  return '600 ' + fs + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
+}
+
+function wmSize(im) {
+  return { w: im.naturalWidth || im.width || 0, h: im.naturalHeight || im.height || 0 };
+}
+function cloneCanvas(src) {
+  const c = makeCanvas(src.width, src.height);
+  c.getContext('2d').drawImage(src, 0, 0);
+  return c;
+}
+
+function drawWatermark(g, w, h, wm) {
+  if (!wm) return;
+  const mode = wm.mode || 'text';
+  const isImg = mode === 'image' && !!wm.image;
+  if (!isImg && !wm.text) return;
+
+  const pad = Math.max(0, w * (wm.margin === undefined ? 2.5 : wm.margin) / 100);
+  const angle = (wm.angle || 0) * Math.PI / 180;
+
+  g.save();
+  g.globalAlpha = wm.opacity;
+  g.fillStyle = wm.color;
+
+  if (mode === 'tiled') {
+    /* repeat across the whole frame. The grid is computed in the rotated
+       frame and the span is the diagonal, so no edge is ever left bare. */
+    const fs = Math.max(11, w * wm.size / 100);
+    g.font = wmFont(wm, w);
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.translate(w / 2, h / 2);
+    g.rotate(angle);
+    const label = wm.text || '©';
+    // spacing is a multiple of the label's own size, so a longer phrase simply
+    // spreads out rather than colliding with itself
+    const gap = 1 + (wm.tileGap === undefined ? 0.6 : wm.tileGap);
+    const stepX = Math.max(fs * 2, label.length * fs * 0.62) * gap;
+    const stepY = fs * 2.4 * gap;
+    const span = Math.hypot(w, h) / 2 + stepX;
+    for (let y = -span; y <= span; y += stepY) {
+      for (let x = -span; x <= span; x += stepX) g.fillText(label, x, y);
+    }
+  } else if (isImg) {
+    const im = wmImage(wm.image);
+    if (im) {
+      const targetW = Math.max(8, w * (wm.imgScale || 26) / 100);
+      const sz = wmSize(im);
+      const targetH = targetW * (sz.h / Math.max(1, sz.w));
+      const pos = wm.pos || 'br';
+      let cx = pos.includes('l') ? pad + targetW / 2
+             : pos.includes('r') ? w - pad - targetW / 2 : w / 2;
+      let cy = pos.includes('t') ? pad + targetH / 2
+             : pos.includes('b') ? h - pad - targetH / 2 : h / 2;
+      g.translate(cx, cy);
+      g.rotate(angle);
+      g.drawImage(im, -targetW / 2, -targetH / 2, targetW, targetH);
+    }
+  } else {
+    const fs = Math.max(11, w * wm.size / 100);
+    g.font = wmFont(wm, w);
+    const pos = wm.pos || 'br';
+    g.textAlign = pos.includes('l') ? 'left' : pos.includes('r') ? 'right' : 'center';
+    g.textBaseline = 'middle';
+    const x = pos.includes('l') ? pad : pos.includes('r') ? w - pad : w / 2;
+    const y = pos.includes('t') ? pad + fs / 2
+            : pos.includes('b') ? h - pad - fs / 2 : h / 2;
+    g.translate(x, y);
+    g.rotate(angle);
+    g.fillText(wm.text, 0, 0);
+  }
+  g.restore();
+}
+
+function applyOp(cv, op) {
+  if (op.type === 'crop') {
+    const c = makeCanvas(op.w, op.h);
+    c.getContext('2d').drawImage(cv, op.x, op.y, op.w, op.h, 0, 0, op.w, op.h);
+    return c;
+  }
+  if (op.type === 'resize') {
+    const c = makeCanvas(op.w, op.h);
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.drawImage(cv, 0, 0, op.w, op.h);
+    return c;
+  }
+  if (op.type === 'rotate90') {
+    const c = makeCanvas(cv.height, cv.width);
+    const g = c.getContext('2d');
+    g.translate(c.width / 2, c.height / 2);
+    g.rotate(op.dir * Math.PI / 2);
+    g.drawImage(cv, -cv.width / 2, -cv.height / 2);
+    return c;
+  }
+  if (op.type === 'rotate') {
+    const rad = op.deg * Math.PI / 180;
+    const w = cv.width, h = cv.height;
+    const nw = Math.abs(w * Math.cos(rad)) + Math.abs(h * Math.sin(rad));
+    const nh = Math.abs(w * Math.sin(rad)) + Math.abs(h * Math.cos(rad));
+    const c = makeCanvas(nw, nh);
+    const g = c.getContext('2d');
+    g.translate(c.width / 2, c.height / 2);
+    g.rotate(rad);
+    g.drawImage(cv, -w / 2, -h / 2);
+    return c;
+  }
+  if (op.type === 'flip') {
+    const c = makeCanvas(cv.width, cv.height);
+    const g = c.getContext('2d');
+    if (op.axis === 'h') { g.translate(cv.width, 0); g.scale(-1, 1); }
+    else { g.translate(0, cv.height); g.scale(1, -1); }
+    g.drawImage(cv, 0, 0);
+    return c;
+  }
+  if (op.type === 'frame') {
+    const p = op.pad;
+    const c = makeCanvas(cv.width + p * 2, cv.height + p * 2);
+    const g = c.getContext('2d');
+    g.fillStyle = op.color;
+    g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(cv, p, p);
+    return c;
+  }
+  if (op.type === 'adj') {
+    const c = makeCanvas(cv.width, cv.height);
+    const g = c.getContext('2d');
+    paint(g, cv, c.width, c.height, op.adj || defaultAdj(), op.curve || defaultCurve(), op.hsl || defaultHsl());
+    return c;
+  }
+  if (op.type === 'watermark') {
+    const c = cloneCanvas(cv);
+    drawWatermark(c.getContext('2d'), c.width, c.height, op.wm);
+    return c;
+  }
+  return cv;
+}
+
