@@ -1,24 +1,24 @@
 {
   "name": "Lumen Studio",
-  "version": "1.11.0",
-  "build": 15,
+  "version": "1.12.0",
+  "build": 16,
   "channel": "stable",
-  "releasedAt": "2026-10-21T06:47:15.736Z",
+  "releasedAt": "2026-10-21T07:25:47.933Z",
   "platforms": {
     "web": {
-      "cache": "lumen-v1.11.0"
+      "cache": "lumen-v1.12.0"
     },
     "android": {
-      "versionName": "1.11.0",
-      "versionCode": 15
+      "versionName": "1.12.0",
+      "versionCode": 16
     },
     "ios": {
-      "CFBundleShortVersionString": "1.11.0",
-      "CFBundleVersion": "15"
+      "CFBundleShortVersionString": "1.12.0",
+      "CFBundleVersion": "16"
     },
     "desktop": {
-      "version": "1.11.0",
-      "build": 15
+      "version": "1.12.0",
+      "build": 16
     }
   }
 }

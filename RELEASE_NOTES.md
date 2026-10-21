@@ -1,4 +1,4 @@
-## v1.11.0 — 2026-10-21
+## v1.12.0 — 2026-10-21
 
-### Features
-- presets and copy/paste adjustments, logo and tiled watermarks with free rotation, page-edge detection for scans, and accessible names on every control ([`4bda687`](https://github.com/bibekch003/lumen-studio/commit/4bda687))
+### Performance
+- run the whole edit-stack rebuild in the Web Worker, so commits no longer block the main thread ([`2ac19c6`](https://github.com/bibekch003/lumen-studio/commit/2ac19c6))

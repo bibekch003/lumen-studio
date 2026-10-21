@@ -2,6 +2,11 @@
 
 All notable changes to Lumen Studio. Generated automatically from commit messages — do not edit by hand.
 
+## v1.12.0 — 2026-10-21
+
+### Performance
+- run the whole edit-stack rebuild in the Web Worker, so commits no longer block the main thread ([`2ac19c6`](https://github.com/bibekch003/lumen-studio/commit/2ac19c6))
+
 ## v1.11.0 — 2026-10-21
 
 ### Features
