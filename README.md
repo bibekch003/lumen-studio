@@ -13,7 +13,7 @@ It is also an installable **Progressive Web App**: open the site, tap **Install*
 | **Crop** | Draggable / resizable frame with rule-of-thirds guides, live pixel readout, aspect-ratio locks (Free, 1:1, 4:3, 3:2, 16:9, 9:16, 4:5) |
 | **Resize** | Width / height with aspect lock, plus quick 25–400% presets |
 | **Transform** | Rotate 90 deg left/right, flip horizontal/vertical, straighten slider (-45 to +45 deg) that auto-expands the canvas |
-| **Adjust** | **Tone** (Highlights, Shadows, Whites, Blacks), **Light** (Brightness, Contrast, Exposure, Fade), **Colour** (Saturation, Vibrance, Temperature, Tint, Hue), plus **Detail** (Sharpen with its own radius and threshold, and Denoise), Posterize, Blur, Vignette, Grayscale, Sepia, Invert and one-click Auto enhance |
+| **Adjust** | **Tone** (Highlights, Shadows, Whites, Blacks), **Light** (Brightness, Contrast, Exposure, Fade), **Colour** (Saturation, Vibrance, Temperature, Tint, Hue), plus **Detail** (Sharpen with its own radius and threshold, Denoise, and Grain), Posterize, Blur, Vignette, Grayscale, Sepia, Invert, a live **histogram with clipping readouts**, and one-click Auto enhance |
 | **Curves** | Interactive tone-curve editor — RGB composite plus separate R, G and B channels. Click to add a point, drag to shape it, double-click to remove. Monotone cubic interpolation, so the curve never overshoots |
 | **HSL** | Per-colour-range grading across 8 bands (reds, oranges, yellows, greens, aquas, blues, purples, magentas), each with hue, saturation and luminance |
 | **Filters** | 15 live-thumbnail presets (Anime, Vivid, Warm, Cool, Fade, Noir, Vintage, Cinematic, Punch, Matte, Film and more) |
@@ -78,6 +78,19 @@ The tonal controls are deliberately separated rather than folded into one bright
 - **Vibrance** weights its boost by how dull a pixel already is. Measured: a near-grey pixel gains ~50% saturation while an already-vivid one gains ~13%, which is what separates it from Saturation.
 
 Every control is **exactly neutral at 0**, every slider has its own reset (double-click its label), and each is verified to stay monotonic so the ramp never inverts.
+
+## Histogram and clipping
+
+The Adjust panel opens with a live RGB histogram of the edited image, plus the percentage of pixels that
+are crushed to black or blown to white. A toggle overlays the clipping on the canvas itself — **blown
+highlights in red, crushed shadows in blue** — so you can see *where* the problem is rather than just that
+it exists. The overlay is opt-in because it costs an extra read of the display canvas.
+
+## Grain
+
+Film grain is applied from a hash of the pixel index rather than a random number generator, so replaying
+an edit always reproduces the identical frame — a random grain would make every undo look different. It
+reads strongest in the midtones and fades at both ends. At 0 it is a byte-exact no-op.
 
 ## Magic Edit
 

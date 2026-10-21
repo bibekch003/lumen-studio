@@ -108,7 +108,7 @@ function buildHueTable(hsl) {
 
 const needsPixel = (a, curve, hsl) => !!(a.exposure || a.temperature || a.tint || a.fade ||
   a.vignette || a.threshold || a.sharpen || a.posterize ||
-  a.highlights || a.shadows || a.whites || a.blacks || a.vibrance || a.denoise) ||
+  a.highlights || a.shadows || a.whites || a.blacks || a.vibrance || a.denoise || a.grain) ||
   curveActive(curve) || hslActive(hsl);
 
 const lutCache = { curveSig: null, rgb: null, r: null, g: null, b: null, hueSig: null, hue: null };
@@ -126,6 +126,11 @@ function prepPixel(ctx, w, h, a, curve, hsl) {
   // tonal zones. All zero by default, and the whole block is skipped when they
   // are, so a neutral image costs nothing.
   const sh = a.shadows / 100, hi = a.highlights / 100;
+  /* Film grain. The noise is derived from the pixel index, not a random number
+     generator, so replaying an edit always produces the identical frame — a
+     random grain would make every undo visibly different. */
+  const gr = (a.grain || 0) / 100;
+  const grainAmp = gr * 42;
   const wh = a.whites / 100, bk = a.blacks / 100, vib = a.vibrance / 100;
   const useTone = !!(sh || hi || wh || bk || vib);
 
@@ -180,13 +185,13 @@ function prepPixel(ctx, w, h, a, curve, hsl) {
   const biasK = 1 + (128 - th) / 128 * 0.35;
   return { ex, tp, tn, fd, th, post, pq, sh, hi, wh, bk, vib, useTone,
            useC, useR, useG, useB, Lrgb, Lr, Lg, Lb, useH, hueTab,
-           vig, vinv, vx, vy, localMean, biasK };
+           vig, vinv, vx, vy, localMean, biasK, gr, grainAmp };
 }
 
 function pixelBand(d, w, h, P, y0, y1) {
   const { ex, tp, tn, fd, th, post, pq, sh, hi, wh, bk, vib, useTone,
           useC, useR, useG, useB, Lrgb, Lr, Lg, Lb, useH, hueTab,
-          vig, vinv, vx, vy, localMean, biasK } = P;
+          vig, vinv, vx, vy, localMean, biasK, gr, grainAmp } = P;
   let px = 0, py = y0;
   for (let i = y0 * w * 4, end = y1 * w * 4; i < end; i += 4) {
     let r = d[i], g = d[i+1], b = d[i+2];
@@ -229,6 +234,19 @@ function pixelBand(d, w, h, P, y0, y1) {
         const l = 0.299 * r + 0.587 * g + 0.114 * b;
         r = l + (r - l) * k; g = l + (g - l) * k; b = l + (b - l) * k;
       }
+    }
+
+    if (gr) {
+      // integer hash of the pixel index -> a stable value in [-0.5, 0.5]
+      let hh = (i * 2654435761) >>> 0;
+      hh ^= hh >>> 15; hh = Math.imul(hh, 2246822519) >>> 0; hh ^= hh >>> 13;
+      const n = (hh & 2047) / 2047 - 0.5;
+      // grain reads strongest in the midtones and fades at both ends
+      const ln = r < g ? (r < b ? r : b) : (g < b ? g : b);
+      const mn = r > g ? (r > b ? r : b) : (g > b ? g : b);
+      const mid = 1 - Math.abs((ln + mn) / 2 / 255 - 0.5) * 1.6;
+      const add = n * grainAmp * (mid > 0 ? mid : 0);
+      r += add; g += add; b += add;
     }
 
     if (useC) {

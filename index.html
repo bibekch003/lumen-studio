@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lumen Studio — Image Editor</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-9zujC6Yx8lDYM9oxRvUjC5UbQ2PaetGN1PG2yGbUFmc='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-3U8y/ef4Lz3tAxW6yujHWV6lCwJ68nB2V9/qpG+E3vw=' 'sha256-ZA5TZ9rkRGP50GidsEDukFvX6KpF62gSbvFWetGGyEo=' 'sha256-PyE/Z3KZFT7Wy294lF/uMWren4CCss6SSUudaoI77Fk='; worker-src 'self'; manifest-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; child-src 'none'; media-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0c0d10">
@@ -676,6 +676,16 @@ input[type=range]::-moz-range-thumb{
 .hsl-band.on{background:var(--surface-2);border-color:var(--c,#fff);color:var(--c,#fff)}
 
 .hidden{display:none !important}
+
+/* ---------- histogram ---------- */
+.hist{width:100%;height:74px;border-radius:11px;border:1px solid var(--stroke-soft);
+  background:var(--surface-2);display:block}
+.hist-clip{display:flex;gap:16px;margin-top:9px;font-size:12px;color:var(--dim)}
+.hist-clip span{display:flex;align-items:center;gap:6px}
+.hist-clip b{color:var(--text);font-variant-numeric:tabular-nums;font-weight:500}
+.hist-clip .sw{width:9px;height:9px;border-radius:3px;display:inline-block}
+.hist-clip .sw.lo{background:#3060ff}
+.hist-clip .sw.hi{background:#ff2020}
 
 /* ---------- magic edit ---------- */
 .tbtn.magic{border-color:transparent;color:#fff;
@@ -1405,7 +1415,7 @@ function defaultAdj() {
            highlights:0, shadows:0, whites:0, blacks:0, vibrance:0,
            // detail work. Radius and threshold default to gentle values so the
            // effect starts conservative rather than at maximum.
-           denoise:0, sharpenRadius:1.2, sharpenThreshold:8, adaptive:0 };
+           denoise:0, sharpenRadius:1.2, sharpenThreshold:8, adaptive:0, grain:0 };
 }
 /* ============ non-destructive colour: curves + HSL ============ */
 
@@ -1668,6 +1678,83 @@ async function paintOffThread(ctx, src, w, h, adj, curve, hsl, skipDetail) {
   return false;
 }
 
+/* ---------- histogram & clipping ----------
+   Read from a small proxy of the edited image, which is plenty for a shape and
+   cheap enough to redo whenever an edit settles. */
+function imageHistogram(cv) {
+  const W = 200, H = Math.max(1, Math.round(200 * cv.height / cv.width));
+  const c = makeCanvas(W, H);
+  const x = c.getContext('2d');
+  x.drawImage(cv, 0, 0, W, H);
+  const d = x.getImageData(0, 0, W, H).data;
+  const R = new Uint32Array(256), G = new Uint32Array(256), B = new Uint32Array(256);
+  let n = 0, lo = 0, hi = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    R[d[i]]++; G[d[i + 1]]++; B[d[i + 2]]++;
+    const l = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+    if (l <= 1) lo++;
+    else if (l >= 254) hi++;
+    n++;
+  }
+  return { R, G, B, n, shadowClip: n ? lo / n : 0, highlightClip: n ? hi / n : 0 };
+}
+
+function drawHistogram(canvas, h) {
+  const W = canvas.width, H = canvas.height;
+  const x = canvas.getContext('2d');
+  x.clearRect(0, 0, W, H);
+  x.fillStyle = 'rgba(255,255,255,.045)';
+  x.fillRect(0, 0, W, H);
+  // scale to the 1st..99th percentile of the tallest channel so one huge spike
+  // (a blown sky, a pure-black border) does not flatten everything else
+  let max = 1;
+  for (let i = 1; i < 255; i++) max = Math.max(max, h.R[i], h.G[i], h.B[i]);
+  x.globalCompositeOperation = 'lighter';
+  const chans = [['R', 'rgba(255,72,72,.8)'], ['G', 'rgba(70,225,120,.8)'], ['B', 'rgba(90,145,255,.8)']];
+  for (const [k, col] of chans) {
+    x.fillStyle = col;
+    x.beginPath();
+    x.moveTo(0, H);
+    for (let i = 0; i < 256; i++) {
+      const v = Math.min(1, h[k][i] / max);
+      x.lineTo(i / 255 * W, H - v * (H - 3));
+    }
+    x.lineTo(W, H);
+    x.closePath();
+    x.fill();
+  }
+  x.globalCompositeOperation = 'source-over';
+}
+
+/* paint blown highlights red and crushed shadows blue, straight onto the view */
+function markClipping(ctx, w, h) {
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  let marked = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    if (l >= 254) { d[i] = 255; d[i + 1] = 32; d[i + 2] = 32; marked++; }
+    else if (l <= 1) { d[i] = 48; d[i + 1] = 96; d[i + 2] = 255; marked++; }
+  }
+  if (marked) ctx.putImageData(img, 0, 0);
+}
+
+let histTimer = null;
+function scheduleHistogram() {
+  clearTimeout(histTimer);
+  histTimer = setTimeout(refreshHistogram, 220);
+}
+function refreshHistogram() {
+  const cv = $('#histCanvas');
+  const a = A();
+  if (!cv || !a) return;
+  const h = imageHistogram(a.source);
+  drawHistogram(cv, h);
+  const hp = h.highlightClip * 100, sp = h.shadowClip * 100;
+  $('#histHi').textContent = hp < 0.01 ? 'none' : hp.toFixed(2) + '%';
+  $('#histLo').textContent = sp < 0.01 ? 'none' : sp.toFixed(2) + '%';
+}
+
 /* ---------- watermark ---------- */
 function drawWatermark(g, w, h, wm) {
   if (!wm || !wm.text) return;
@@ -1925,7 +2012,9 @@ function render() {
   // sharpen is invisible at preview scale and is the most expensive pass, so
   // skip it while a slider is moving
   paint(ctx, useSrc, iw, ih, useAdj, useCurve, useHsl, S.fastPreview);
+  if (settings.clipWarn && !S.compare) markClipping(ctx, iw, ih);
 
+  scheduleHistogram();
   positionCrop();
   updateStatus();
   syncPillBar();
@@ -2658,6 +2747,29 @@ function buildAdjust(P, F) {
   s.appendChild(slider('Fade', () => a.adj.fade, v => a.adj.fade = v, 0, 100, 1, v => v, () => a.adj.fade = 0));
   P.appendChild(s);
 
+  const hsec = sec();
+  hsec.appendChild(secLabel('Histogram', 'the edited image, red green blue'));
+  const hc = document.createElement('canvas');
+  hc.id = 'histCanvas';
+  hc.width = 256; hc.height = 74;
+  hc.className = 'hist';
+  hsec.appendChild(hc);
+  const hrow = document.createElement('div');
+  hrow.className = 'hist-clip';
+  hrow.innerHTML = '<span><i class="sw lo"></i>Crushed <b id="histLo">—</b></span>' +
+                   '<span><i class="sw hi"></i>Blown <b id="histHi">—</b></span>';
+  hsec.appendChild(hrow);
+  const tg = document.createElement('div');
+  tg.className = 'toggle-row';
+  tg.innerHTML = '<span>Show clipping on the image</span><label class="switch"><input type="checkbox"' +
+    (settings.clipWarn ? ' checked' : '') + '><span class="track"></span></label>';
+  tg.querySelector('input').addEventListener('change', e => {
+    settings.clipWarn = e.target.checked; persistSettings(); render();
+  });
+  hsec.appendChild(tg);
+  P.appendChild(hsec);
+  setTimeout(refreshHistogram, 0);
+
   const st = sec();
   st.appendChild(secLabel('Tone', 'double-click a label to reset it'));
   st.appendChild(slider('Highlights', () => a.adj.highlights, v => a.adj.highlights = v, -100, 100, 1, v => v, () => a.adj.highlights = 0));
@@ -2698,6 +2810,7 @@ function buildAdjust(P, F) {
     v => v < 2 ? 'Off' : v + ' levels', () => a.adj.posterize = 0));
   s3.appendChild(slider('Blur', () => a.adj.blur, v => a.adj.blur = v, 0, 24, 0.5, v => v + 'px', () => a.adj.blur = 0));
   s3.appendChild(slider('Vignette', () => a.adj.vignette, v => a.adj.vignette = v, 0, 100, 1, v => v, () => a.adj.vignette = 0));
+  s3.appendChild(slider('Grain', () => a.adj.grain, v => a.adj.grain = v, 0, 100, 1, v => v, () => a.adj.grain = 0));
   s3.appendChild(slider('Grayscale', () => a.adj.grayscale, v => a.adj.grayscale = v, 0, 100, 1, v => v + '%', () => a.adj.grayscale = 0));
   s3.appendChild(slider('Sepia', () => a.adj.sepia, v => a.adj.sepia = v, 0, 100, 1, v => v + '%', () => a.adj.sepia = 0));
   s3.appendChild(slider('Invert', () => a.adj.invert, v => a.adj.invert = v, 0, 100, 1, v => v + '%', () => a.adj.invert = 0));
@@ -4228,7 +4341,7 @@ $('#dashSort').addEventListener('click', e => {
 /* ============ settings ============ */
 const SETTINGS_KEY = 'lumen-settings';
 const SETTINGS_DEFAULTS = { theme: 'system', plain: false, motion: false, quality: 'balanced',
-                            format: 'image/png', autosave: true, jpegBg: '#ffffff', quality2: 1 };
+                            format: 'image/png', autosave: true, jpegBg: '#ffffff', quality2: 1, clipWarn: false };
 let settings = Object.assign({}, SETTINGS_DEFAULTS);
 try { const raw = localStorage.getItem(SETTINGS_KEY); if (raw) settings = Object.assign({}, SETTINGS_DEFAULTS, JSON.parse(raw)); } catch (e) {}
 function persistSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {} }
