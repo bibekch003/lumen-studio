@@ -112,6 +112,14 @@ Film grain is applied from a hash of the pixel index rather than a random number
 an edit always reproduces the identical frame — a random grain would make every undo look different. It
 reads strongest in the midtones and fades at both ends. At 0 it is a byte-exact no-op.
 
+## Visual consistency
+
+The stylesheet had drifted into **15 near-identical font sizes, 21 border radii and 15 gap values** —
+each individually invisible, collectively the reason a UI feels slightly off. They are now snapped to a
+single scale: six type steps, a radius set, and an 8-step spacing rhythm, with the scales recorded as
+custom properties so later work has something to snap to. Section labels also put their hint on its own
+line rather than wrapping beside the label in a narrow panel.
+
 ## Accessibility
 
 Every control in the app carries an accessible name. Rather than trusting each panel builder to remember,
@@ -151,7 +159,9 @@ would be visible to anyone.
 - **Commits do not grow with history depth.** A new edit resumes from the nearest cached step, so it
   costs one operation rather than replaying the whole stack — 1205 ms → 254 ms at depth 3.
 - **Exporting shows a "Rendering at full resolution" state** before it starts, so a long export never
-  looks like a dead tab.
+  looks like a dead tab — and it can be **cancelled**. Cancelling terminates the worker, which is the only
+  way to actually stop work that is already running off-thread; the next job builds a fresh one and hands
+  over the image again.
 
 - **Full-resolution export runs off the main thread.** The pipeline lives in `pixels.js`, which is loaded
   both by the page and by `pixel-worker.js` — so there is one copy of the maths, not two. The worker
